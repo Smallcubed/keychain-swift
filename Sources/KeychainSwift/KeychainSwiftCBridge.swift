@@ -177,6 +177,12 @@ public class KeychainSwiftCBridge: NSObject {
 		return keychain.delete(key, service: service);
 	}
 	
+	@objc (deleteForKey:service:label:)
+	@discardableResult
+	open func delete(_ key: String, service: String, label: String) -> Bool {
+		return keychain.delete(key, service: service, label: label);
+	}
+	
 	@discardableResult
 	open func clear() -> Bool {
 		return keychain.clear()

@@ -11,10 +11,16 @@ import KeychainBase
 extension KeychainSwift {
 	
 	func password(account: KeychainAccount, service: String? = nil) -> String? {
-		guard let pw = get(account.keychainAccountName, service: service ?? account.keychainServiceName, label: account.keychainLabelName) else {
-			return migratePassword(account.keychainAccountName, service: service ?? account.keychainServiceName, label: account.keychainLabelName)
+		if let pw = get(account.keychainAccountName, service: service ?? account.keychainServiceName, label: account.keychainLabelName) {
+			return pw
 		}
-		return pw
+		if let pw = migratePassword(account.keychainAccountName, service: service ?? account.keychainServiceName, label: account.keychainLabelName) {
+			return pw
+		}
+		if let label = account.keychainLegacyName {
+			return get(account.keychainAccountName, service: service ?? account.keychainServiceName, label: label)
+		}
+		return nil
 	}
 	
 	func data(account: KeychainAccount) -> Data? {
@@ -25,7 +31,7 @@ extension KeychainSwift {
 	}
 	
 	func deletePassword(account: KeychainAccount) -> Bool {
-		return delete(account.keychainAccountName, service: account.keychainServiceName)
+		return delete(account.keychainAccountName, service: account.keychainServiceName, label: account.keychainLabelName)
 	}
 	
 	func set(_ password: String, account: KeychainAccount) -> Bool {
@@ -62,7 +68,11 @@ extension KeychainSwift {
 		guard let passwordData = account.loginPassword.data(using: String.Encoding.utf8) else {
 			return false
 		}
-		let model = AccountModel(passwordData: passwordData, host: account.hostname, port: account.portNumber, ssl: account.ssl, login: account.loginName)
+		var smtpIdent: String? = nil
+		if let acct = account as? KeychainWithSMTPAccount {
+			smtpIdent = acct.preferredSMTPAccountIdentifier
+		}
+		let model = AccountModel(passwordData: passwordData, host: account.hostname, port: account.portNumber, ssl: account.ssl, login: account.loginName, smtpIdent: smtpIdent)
 		do {
 			let encoder = JSONEncoder()
 			let data: Data = try encoder.encode(model)
@@ -84,17 +94,22 @@ struct AccountModel: Codable {
 	var port: Int
 	var ssl: Bool
 	var login: String
-	
+	var smtpIdent: String?
+
 	func dict() -> [String: Any]? {
 		guard let password = String(data: passwordData, encoding: .utf8) else {
 			return nil
 		}
-		return [
+		var res: [String: Any] = [
 			"password": password,
 			"host": host,
 			"login": login,
 			"port": port,
 			"ssl": ssl,
 		]
+		if let smtpIdent {
+			res["smtpIdent"] = smtpIdent
+		}
+		return res
 	}
 }

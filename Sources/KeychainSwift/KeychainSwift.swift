@@ -222,7 +222,7 @@ open class KeychainSwift {
 		lock.lock()
 		defer { lock.unlock() }
 		
-		deleteNoLock(key, service: service) // Delete any existing key before saving it
+		deleteNoLock(key, service: service, label: label) // Delete any existing key before saving it
 		
 		let accessible = access?.value ?? overrideAccessOption.value
 		
@@ -284,13 +284,13 @@ open class KeychainSwift {
 	 
 	 */
 	@discardableResult
-	open func delete(_ key: String, service: String? = nil) -> Bool {
+	open func delete(_ key: String, service: String? = nil, label: String? = nil) -> Bool {
 		// The lock prevents the code to be run simultaneously
 		// from multiple threads which may result in crashing
 		lock.lock()
 		defer { lock.unlock() }
 		
-		return deleteNoLock(key, service: service)
+		return deleteNoLock(key, service: service, label: label)
 	}
 	
 	/**
@@ -303,7 +303,7 @@ open class KeychainSwift {
 	 
 	 */
 	@discardableResult
-	func deleteNoLock(_ key: String, service: String? = nil) -> Bool {
+	func deleteNoLock(_ key: String, service: String? = nil, label: String? = nil) -> Bool {
 		let prefixedKey = keyWithPrefix(key)
 		
 		var query: [String: Any] = [
@@ -311,6 +311,7 @@ open class KeychainSwift {
 			KeychainSwiftConstants.attrAccount : prefixedKey
 		]
 		
+		query = addLabel(query, label: label)
 		query = addServiceName(query, override: service)
 		query = addDataProtection(query)
 		query = addAccessGroupWhenPresent(query)
@@ -366,7 +367,7 @@ open class KeychainSwift {
 		fileKeychain.useFileKeychain = true
 		let value = fileKeychain.get(key, service: service)
 		if let pw = value, set(pw, forKey: key, service: service, label: label) {
-			fileKeychain.delete(key, service: service)
+			fileKeychain.delete(key, service: service, label: label)
 		}
 		return value
 	}
@@ -386,7 +387,7 @@ open class KeychainSwift {
 		fileKeychain.useFileKeychain = true
 		let value = fileKeychain.getData(key, service: service)
 		if let pw = value, set(pw, forKey: key, service: service, label: label) {
-			fileKeychain.delete(key, service: service)
+			fileKeychain.delete(key, service: service, label: label)
 		}
 		return value
 	}
