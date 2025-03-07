@@ -17,8 +17,8 @@ extension KeychainSwift {
 		if let pw = migratePassword(account.keychainAccountName, service: service ?? account.keychainServiceName, label: account.keychainLabelName) {
 			return pw
 		}
-		if let label = account.keychainLegacyName {
-			return get(account.keychainAccountName, service: service ?? account.keychainServiceName, label: label)
+		if let accountName = account.keychainLegacyAccountName, let label = account.keychainLegacyLabel {
+			return get(accountName, service: service ?? account.keychainServiceName, label: label)
 		}
 		return nil
 	}
@@ -42,14 +42,17 @@ extension KeychainSwift {
 	}
 	
 	func set(_ passwordData: Data, account: KeychainAccount) -> Bool {
+		let result = set(passwordData, forKey: account.keychainAccountName, service: account.keychainServiceName, label: account.keychainLabelName)
+		account.resetInternalPassword()
 		store(account: account)
-		return set(passwordData, forKey: account.keychainAccountName, service: account.keychainServiceName, label: account.keychainLabelName)
+		return result
 	}
 	
 	//	MARK: - All Account Info
 	
 	func retrieve(account: KeychainAccount) -> [String: Any]? {
-		guard let data = data(account: account) else {
+		//	Use the getData method directly in order to override the service and label
+		guard let data = getData(account.keychainAccountName, service: "\(AccountModel.serviceKey): \(account.keychainServiceName)", label: "\(account.keychainLabelName) (\(AccountModel.serviceKey))") else {
 			return nil
 		}
 		do {
@@ -76,12 +79,16 @@ extension KeychainSwift {
 		do {
 			let encoder = JSONEncoder()
 			let data: Data = try encoder.encode(model)
-			return set(data, forKey: account.keychainAccountName, service: "\(AccountModel.serviceKey): \(account.keychainServiceName)", label: account.keychainLabelName)
+			return set(data, forKey: account.keychainAccountName, service: "\(AccountModel.serviceKey): \(account.keychainServiceName)", label: "\(account.keychainLabelName) (\(AccountModel.serviceKey))")
 		}
 		catch {
 			print("Error encoding Accountmodel: \(error)")
 		}
 		return false
+	}
+	
+	func deleteStore(account: KeychainAccount) -> Bool {
+		return delete(account.keychainAccountName, service: "\(AccountModel.serviceKey): \(account.keychainServiceName)", label: "\(account.keychainLabelName) (\(AccountModel.serviceKey))")
 	}
 	
 }

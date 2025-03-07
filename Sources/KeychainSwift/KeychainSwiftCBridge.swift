@@ -231,7 +231,13 @@ public class KeychainSwiftCBridge: NSObject {
 	@objc (deletePasswordForAccount:)
 	@discardableResult
 	open func delete(account: KeychainAccount) -> Bool {
-		return keychain.deletePassword(account: account);
+		return keychain.deletePassword(account: account)
+	}
+	
+	@objc (deleteInfoForAccount:)
+	@discardableResult
+	open func deleteInfo(account: KeychainAccount) -> Bool {
+		return keychain.deleteStore(account: account)
 	}
 	
 	@objc (setPassword:forAccount:)
