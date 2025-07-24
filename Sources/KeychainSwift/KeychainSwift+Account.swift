@@ -7,26 +7,47 @@
 
 import Foundation
 import KeychainBase
+import SCBaseKit
 
 extension KeychainSwift {
 	
 	func password(account: KeychainAccount, service: String? = nil) -> String? {
 		if let pw = get(account.keychainAccountName, service: service ?? account.keychainServiceName, label: account.keychainLabelName) {
+            let logValue = (pw.data(using: .utf8) as? NSData)?.randomTruncatedSHAHash ?? ""
+            
+            log(string: "FOUND pw \(logValue) for \(account.keychainAccountName)")
 			return pw
 		}
+      
 		if let pw = migratePassword(account.keychainAccountName, service: service ?? account.keychainServiceName, label: account.keychainLabelName) {
+            let logValue = (pw.data(using: .utf8) as? NSData)?.randomTruncatedSHAHash ?? ""
+           
+            log(string: "Migrated pw \(logValue) for \(account.keychainAccountName)")
 			return pw
 		}
-		if let accountName = account.keychainLegacyAccountName, let label = account.keychainLegacyLabel {
-			return get(accountName, service: service ?? account.keychainServiceName, label: label)
-		}
+        if let accountName = account.keychainLegacyAccountName, let label = account.keychainLegacyLabel ,
+           let pw = get(accountName, service: service ?? account.keychainServiceName, label: label){
+            // shoud we migrate this pw into the current format?
+            let logValue = (pw.data(using: .utf8) as? NSData)?.randomTruncatedSHAHash ?? ""
+            log(string: "FOUND LEGACY pw \(logValue) for \(account.keychainAccountName)")
+            return pw
+        }
+        if (account.authenticationMethod != "XOAUTH2"){
+            log(string: "🛑 NO pw for \(account.keychainAccountName)")
+        }
 		return nil
 	}
 	
 	func data(account: KeychainAccount) -> Data? {
 		guard let data = getData(account.keychainAccountName, service: account.keychainServiceName, label: account.keychainLabelName) else {
-			return migrateData(account.keychainAccountName, service: account.keychainServiceName, label: account.keychainLabelName)
+            
+			let migratedData =  migrateData(account.keychainAccountName, service: account.keychainServiceName, label: account.keychainLabelName)
+            let logValue = (migratedData as? NSData)?.randomTruncatedSHAHash ?? ""
+           
+            log(string: "MIGRATED data \(logValue) for \(account.keychainAccountName)")
+            return migratedData
 		}
+        log(string: "FOUND data \((data as NSData).randomTruncatedSHAHash) for \(account.keychainAccountName) ")
 		return data
 	}
 	

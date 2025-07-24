@@ -1,6 +1,7 @@
 import Security
 import Foundation
-
+import AppKit
+import SCBaseKit
 /**
 
 A collection of helper functions for saving text and data in the keychain.
@@ -50,10 +51,10 @@ open class KeychainSwift {
 	open var overrideAccessOption: KeychainSwiftAccessOptions = .defaultOption
 	
 	
-	private let lock = NSLock()
+	private let lock = NSRecursiveLock()
 	private let recurseMax: Int = 10
 
-	
+    private static var _requestIdx_ : Int = 0
 	/**
 	 
 	 - parameter keyPrefix: a prefix that is added before the key in get/set methods. Note that `clear` method still clears everything from the Keychain.
@@ -65,6 +66,9 @@ open class KeychainSwift {
 		self.serviceName = service
 	}
 	
+    open func log(string: String){
+        SCLogger(forSubsystem: "Authorization")?.log(string: string)
+    }
 	
 	//	MARK: - Get Methods
 	
@@ -102,56 +106,73 @@ open class KeychainSwift {
 	 - returns: The text value from the keychain. Returns nil if unable to read the item.
 	 
 	 */
+   
+    func getDataNoLock(_ key: String,
+                  service: String? = nil,
+                  label:String? = nil,
+                  requestIndex requestIdx: Int,
+                  asReference: Bool = false) -> Data?{
+       
+        var logKey = "\(key) "
+        if let service {  logKey += " *️⃣\(service)"}
+        if let label {  logKey += " #️⃣\(label)" }
+        
+        
+        let prefixedKey = keyWithPrefix(key)
+        
+        
+        var query: [String: Any] = [
+            KeychainSwiftConstants.klass       : kSecClassGenericPassword,
+            KeychainSwiftConstants.attrAccount : prefixedKey,
+            KeychainSwiftConstants.matchLimit  : kSecMatchLimitOne
+        ]
+        
+        if asReference {
+            query[KeychainSwiftConstants.returnReference] = kCFBooleanTrue
+        } else {
+            query[KeychainSwiftConstants.returnData] =  kCFBooleanTrue
+        }
+        
+        query = addServiceName(query, override: service)
+        query = addDataProtection(query)
+        query = addAccessGroupWhenPresent(query)
+        query = addSynchronizableIfRequired(query, addingItems: false)
+        lastQueryParameters = query
+        
+        var result: AnyObject?
+        
+        var lastResultCode = withUnsafeMutablePointer(to: &result) {
+            SecItemCopyMatching(query as CFDictionary, UnsafeMutablePointer($0))
+        }
+        var attemptCount = 1
+        while (lastResultCode == errSecInteractionNotAllowed && attemptCount < recurseMax){
+            log(string:"[\(requestIdx)] ⚠️ Keychain is not yet available -- trying again in .5 seconds")
+            Thread.sleep(until: Date(timeIntervalSinceNow: 0.5))
+            lastResultCode = withUnsafeMutablePointer(to: &result) {
+                SecItemCopyMatching(query as CFDictionary, UnsafeMutablePointer($0))
+            }
+            attemptCount += 1
+        }
+        if let resultData = result as? NSData{
+//            log(string:"[GET \(requestIdx)] \(logKey) 🟢 \(resultData.randomTruncatedSHAHash)" )
+        }
+        else {
+//            log(string:"[GET \(requestIdx)] \(logKey) 🛑 Could not retrieve data")
+        }
+        return result as? Data
+    }
 	open func getData(_ key: String,
 					  service: String? = nil, label: String? = nil,
 					  recurseCount: Int = 0,
 					  asReference: Bool = false) -> Data? {
-
-		guard recurseCount < recurseMax else {
-			lock.unlock()
-			return nil
-		}
-
-		// The lock prevents the code to be run simultaneously
-		// from multiple threads which may result in crashing
-		if recurseCount == 0 {
-			lock.lock()
-		}
-		
-		let prefixedKey = keyWithPrefix(key)
-		
-		var query: [String: Any] = [
-			KeychainSwiftConstants.klass       : kSecClassGenericPassword,
-			KeychainSwiftConstants.attrAccount : prefixedKey,
-			KeychainSwiftConstants.matchLimit  : kSecMatchLimitOne
-		]
-		
-		if asReference {
-			query[KeychainSwiftConstants.returnReference] = kCFBooleanTrue
-		} else {
-			query[KeychainSwiftConstants.returnData] =  kCFBooleanTrue
-		}
-		
-		query = addServiceName(query, override: service)
-		query = addDataProtection(query)
-		query = addAccessGroupWhenPresent(query)
-		query = addSynchronizableIfRequired(query, addingItems: false)
-		lastQueryParameters = query
-		
-		var result: AnyObject?
-		
-		lastResultCode = withUnsafeMutablePointer(to: &result) {
-			SecItemCopyMatching(query as CFDictionary, UnsafeMutablePointer($0))
-		}
-		
-		guard lastResultCode != errSecInteractionNotAllowed else {
-			//	This allows the Security system to finish unlocking the keychain
-			Thread.sleep(until: Date(timeIntervalSinceNow: 0.5))
-			return getData(key, service: service, label: label, recurseCount: recurseCount + 1, asReference: asReference)
-		}
-		
-		lock.unlock()
-		return result as? Data
+        
+        
+        lock.lock()
+        defer { lock.unlock() }
+        KeychainSwift._requestIdx_ += 1
+        let requestIdx = KeychainSwift._requestIdx_
+    
+        return getDataNoLock(key,service:service, label:label, requestIndex: requestIdx,asReference : asReference)
 	}
 	
 	/**
@@ -222,8 +243,15 @@ open class KeychainSwift {
 		lock.lock()
 		defer { lock.unlock() }
 		
-		deleteNoLock(key, service: service, label: label) // Delete any existing key before saving it
-		
+        var logKey = "\(key) "
+        if let service {  logKey += " *️⃣\(service)"}
+        if let label {  logKey += " #️⃣\(label)" }
+        
+        KeychainSwift._requestIdx_ += 1
+        let requestIdx = KeychainSwift._requestIdx_
+        
+        //deleteNoLock(key, service: service, label: label) // Delete any existing key before saving it
+ 
 		let accessible = access?.value ?? overrideAccessOption.value
 		
 		let prefixedKey = keyWithPrefix(key)
@@ -241,9 +269,32 @@ open class KeychainSwift {
 		query = addAccessGroupWhenPresent(query)
 		query = addSynchronizableIfRequired(query, addingItems: true)
 		lastQueryParameters = query
-		
-		lastResultCode = SecItemAdd(query as CFDictionary, nil)
-		
+        if let currentData = getDataNoLock(key,service: service, label:label, requestIndex:requestIdx){
+//            guard currentData != value else{
+//                log(string:"[SET \(requestIdx)] \(logKey) 🟢 Data is unchanged! returning" )
+//                return true
+//            }
+            if !deleteNoLock(key, service: service, label: label) {
+                log(string:"[SET \(requestIdx)] 🛑 Could not delete old key error: \(lastResultCode)" )
+            }
+        }
+        
+        lastResultCode = SecItemAdd(query as CFDictionary, nil)
+    
+        if (lastResultCode == noErr){
+            log(string:"[SET \(requestIdx)] \(logKey) 🟢 \((value as NSData).randomTruncatedSHAHash)" )
+            if let rereadData = getDataNoLock(key,service: service, label:label, requestIndex:requestIdx){
+                if (value != rereadData){
+                    log(string:"[Valid \(requestIdx)] \(logKey) 🛑 readData (\((rereadData as NSData).randomTruncatedSHAHash)) does not match setData: \((value as NSData).randomTruncatedSHAHash)" )
+                }
+            }
+            else{
+                log(string:"[Valid \(requestIdx)] \(logKey) 🛑 readData NIL does not match setData: \((value as NSData).randomTruncatedSHAHash)" )
+            }
+        }
+        else{
+            log(string:"[SET \(requestIdx)] \(logKey) 🛑 Could not set data \((value as NSData).randomTruncatedSHAHash) error: \(lastResultCode)")
+        }
 		return lastResultCode == noErr
 	}
 	
@@ -306,6 +357,10 @@ open class KeychainSwift {
 	func deleteNoLock(_ key: String, service: String? = nil, label: String? = nil) -> Bool {
 		let prefixedKey = keyWithPrefix(key)
 		
+        var logKey = "\(key) "
+        if let service {  logKey += " *️⃣\(service)"}
+        if let label {  logKey += " #️⃣\(label)" }
+        
 		var query: [String: Any] = [
 			KeychainSwiftConstants.klass       : kSecClassGenericPassword,
 			KeychainSwiftConstants.attrAccount : prefixedKey
@@ -319,7 +374,10 @@ open class KeychainSwift {
 		lastQueryParameters = query
 		
 		lastResultCode = SecItemDelete(query as CFDictionary)
-		
+        if (lastResultCode != noErr){
+            log(string:"[DELETE ] 🛑 Could not delete key error: \(lastResultCode)" )
+        }
+        
 		return lastResultCode == noErr
 	}
 	
