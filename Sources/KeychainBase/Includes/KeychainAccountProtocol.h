@@ -24,6 +24,7 @@ NS_ASSUME_NONNULL_BEGIN
 @property (readonly) BOOL ssl;
 @property (copy, readonly) NSString * loginName;
 @property (strong, readonly) NSString * loginPassword;
+@property (strong, readonly) NSString * authenticationMethod;
 
 - (void)resetInternalPassword;
 
