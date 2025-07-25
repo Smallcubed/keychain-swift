@@ -50,6 +50,9 @@ open class KeychainSwift {
 	 */
 	open var overrideAccessOption: KeychainSwiftAccessOptions = .defaultOption
 	
+    private var lastResultErrorDescription: String {
+        return SecCopyErrorMessageString(lastResultCode, nil) as? String ?? "Code \(lastResultCode)"
+    }
 	
 	private let lock = NSRecursiveLock()
 	private let recurseMax: Int = 10
@@ -132,7 +135,7 @@ open class KeychainSwift {
         } else {
             query[KeychainSwiftConstants.returnData] =  kCFBooleanTrue
         }
-        
+        query = addLabel(query, label: label)
         query = addServiceName(query, override: service)
         query = addDataProtection(query)
         query = addAccessGroupWhenPresent(query)
@@ -275,7 +278,7 @@ open class KeychainSwift {
 //                return true
 //            }
             if !deleteNoLock(key, service: service, label: label) {
-                log(string:"[SET \(requestIdx)] 🛑 Could not delete old key error: \(lastResultCode)" )
+                log(string:"[SET \(requestIdx)] 🛑 Could not delete old key error: \(lastResultErrorDescription)" )
             }
         }
         
@@ -353,6 +356,7 @@ open class KeychainSwift {
 	 - returns: True if the item was successfully deleted.
 	 
 	 */
+   
 	@discardableResult
 	func deleteNoLock(_ key: String, service: String? = nil, label: String? = nil) -> Bool {
 		let prefixedKey = keyWithPrefix(key)
@@ -375,7 +379,7 @@ open class KeychainSwift {
 		
 		lastResultCode = SecItemDelete(query as CFDictionary)
         if (lastResultCode != noErr){
-            log(string:"[DELETE ] 🛑 Could not delete key error: \(lastResultCode)" )
+            log(string:"[DELETE ] 🛑 Could not delete entry for \(logKey) error: \(lastResultErrorDescription)" )
         }
         
 		return lastResultCode == noErr

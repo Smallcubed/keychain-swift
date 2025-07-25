@@ -15,21 +15,21 @@ extension KeychainSwift {
 		if let pw = get(account.keychainAccountName, service: service ?? account.keychainServiceName, label: account.keychainLabelName) {
             let logValue = (pw.data(using: .utf8) as? NSData)?.randomTruncatedSHAHash ?? ""
             
-            log(string: "FOUND pw \(logValue) for \(account.keychainAccountName)")
+            log(string: "FOUND pw \(logValue) for \(account.keychainAccountName) s:\(service ?? account.keychainServiceName) l:\(account.keychainLabelName)")
 			return pw
 		}
       
 		if let pw = migratePassword(account.keychainAccountName, service: service ?? account.keychainServiceName, label: account.keychainLabelName) {
             let logValue = (pw.data(using: .utf8) as? NSData)?.randomTruncatedSHAHash ?? ""
            
-            log(string: "Migrated pw \(logValue) for \(account.keychainAccountName)")
+            log(string: "Migrated pw \(logValue) for \(account.keychainAccountName) s:\(service ?? account.keychainServiceName) l:\(account.keychainLabelName)")
 			return pw
 		}
         if let accountName = account.keychainLegacyAccountName, let label = account.keychainLegacyLabel ,
            let pw = get(accountName, service: service ?? account.keychainServiceName, label: label){
             // shoud we migrate this pw into the current format?
             let logValue = (pw.data(using: .utf8) as? NSData)?.randomTruncatedSHAHash ?? ""
-            log(string: "FOUND LEGACY pw \(logValue) for \(account.keychainAccountName)")
+            log(string: "FOUND pw \(logValue) for LEGACY \(accountName) s:\(service ?? account.keychainServiceName) l:\(label)")
             return pw
         }
         if (account.authenticationMethod != "XOAUTH2"){
@@ -39,16 +39,30 @@ extension KeychainSwift {
 	}
 	
 	func data(account: KeychainAccount) -> Data? {
-		guard let data = getData(account.keychainAccountName, service: account.keychainServiceName, label: account.keychainLabelName) else {
+        if let data = getData(account.keychainAccountName, service: account.keychainServiceName, label: account.keychainLabelName) {
+            let logValue = (data as NSData).randomTruncatedSHAHash
+            log(string: "FOUND data \(logValue) for \(account.keychainAccountName) s:\(account.keychainServiceName) l:\(account.keychainLabelName)")
             
-			let migratedData =  migrateData(account.keychainAccountName, service: account.keychainServiceName, label: account.keychainLabelName)
-            let logValue = (migratedData as? NSData)?.randomTruncatedSHAHash ?? ""
-           
-            log(string: "MIGRATED data \(logValue) for \(account.keychainAccountName)")
-            return migratedData
+            return data
+        }
+        if let data =  migrateData(account.keychainAccountName, service: account.keychainServiceName, label: account.keychainLabelName) {
+            let logValue = (data as NSData).randomTruncatedSHAHash
+            log(string: "Migrated data \(logValue) for \(account.keychainAccountName) s:\(account.keychainServiceName) l:\(account.keychainLabelName)")
+    
+            return data
 		}
-        log(string: "FOUND data \((data as NSData).randomTruncatedSHAHash) for \(account.keychainAccountName) ")
-		return data
+        if let accountName = account.keychainLegacyAccountName, let label = account.keychainLegacyLabel ,
+           let data = getData(accountName, service: account.keychainServiceName, label: label){
+            // shoud we migrate this pw into the current format?
+            let logValue = (data as NSData).randomTruncatedSHAHash
+            log(string: "FOUND data \(logValue) for LEGACY \(accountName) s:\(account.keychainServiceName) l:\(label)")
+      
+            return data
+        }
+        if (account.authenticationMethod == "XOAUTH2"){
+            log(string: "🛑 NO data for \(account.keychainAccountName)")
+        }
+      	return nil
 	}
 	
 	func deletePassword(account: KeychainAccount) -> Bool {
