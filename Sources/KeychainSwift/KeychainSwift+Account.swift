@@ -15,25 +15,25 @@ extension KeychainSwift {
 		if let pw = get(account.keychainAccountName, service: service ?? account.keychainServiceName, label: account.keychainLabelName) {
             let logValue = (pw.data(using: .utf8) as? NSData)?.randomTruncatedSHAHash ?? ""
             
-            log(string: "FOUND pw \(logValue) for \(account.keychainAccountName) s:\(service ?? account.keychainServiceName) l:\(account.keychainLabelName)")
+            log(string: "[Keychain] FOUND pw \(logValue) for Name: \(account.keychainAccountName) s:\(service ?? account.keychainServiceName) l:\(account.keychainLabelName) account:\(account)")
 			return pw
 		}
       
 		if let pw = migratePassword(account.keychainAccountName, service: service ?? account.keychainServiceName, label: account.keychainLabelName) {
             let logValue = (pw.data(using: .utf8) as? NSData)?.randomTruncatedSHAHash ?? ""
            
-            log(string: "Migrated pw \(logValue) for \(account.keychainAccountName) s:\(service ?? account.keychainServiceName) l:\(account.keychainLabelName)")
+            log(string: "[Keychain] Migrated pw \(logValue) for \(account.keychainAccountName) s:\(service ?? account.keychainServiceName) l:\(account.keychainLabelName) account: \(account)")
 			return pw
 		}
         if let accountName = account.keychainLegacyAccountName, let label = account.keychainLegacyLabel ,
            let pw = get(accountName, service: service ?? account.keychainServiceName, label: label){
             // shoud we migrate this pw into the current format?
             let logValue = (pw.data(using: .utf8) as? NSData)?.randomTruncatedSHAHash ?? ""
-            log(string: "FOUND pw \(logValue) for LEGACY \(accountName) s:\(service ?? account.keychainServiceName) l:\(label)")
+            log(string: "[Keychain] FOUND pw \(logValue) for LEGACYNAME \(accountName) s:\(service ?? account.keychainServiceName) l:\(label) account: \(account)")
             return pw
         }
         if (account.authenticationMethod != "XOAUTH2"){
-            log(string: "🛑 NO pw for \(account.keychainAccountName)")
+            log(string: "[Keychain] 🛑 NO pw for \(account.keychainAccountName)")
         }
 		return nil
 	}
@@ -41,13 +41,13 @@ extension KeychainSwift {
 	func data(account: KeychainAccount) -> Data? {
         if let data = getData(account.keychainAccountName, service: account.keychainServiceName, label: account.keychainLabelName) {
             let logValue = (data as NSData).randomTruncatedSHAHash
-            log(string: "FOUND data \(logValue) for \(account.keychainAccountName) s:\(account.keychainServiceName) l:\(account.keychainLabelName)")
+            log(string: "[Keychain] FOUND data \(logValue) for \(account.keychainAccountName) s:\(account.keychainServiceName) l:\(account.keychainLabelName)")
             
             return data
         }
         if let data =  migrateData(account.keychainAccountName, service: account.keychainServiceName, label: account.keychainLabelName) {
             let logValue = (data as NSData).randomTruncatedSHAHash
-            log(string: "Migrated data \(logValue) for \(account.keychainAccountName) s:\(account.keychainServiceName) l:\(account.keychainLabelName)")
+            log(string: "[Keychain] Migrated data \(logValue) for \(account.keychainAccountName) s:\(account.keychainServiceName) l:\(account.keychainLabelName)")
     
             return data
 		}
@@ -55,12 +55,12 @@ extension KeychainSwift {
            let data = getData(accountName, service: account.keychainServiceName, label: label){
             // shoud we migrate this pw into the current format?
             let logValue = (data as NSData).randomTruncatedSHAHash
-            log(string: "FOUND data \(logValue) for LEGACY \(accountName) s:\(account.keychainServiceName) l:\(label)")
+            log(string: "[Keychain] FOUND data \(logValue) for LEGACY \(accountName) s:\(account.keychainServiceName) l:\(label)")
       
             return data
         }
         if (account.authenticationMethod == "XOAUTH2"){
-            log(string: "🛑 NO data for \(account.keychainAccountName)")
+            log(string: "[Keychain] 🛑 NO data for \(account.keychainAccountName)")
         }
       	return nil
 	}
