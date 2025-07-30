@@ -161,6 +161,7 @@ struct AccountModel: Codable {
 			return nil
 		}
 		var res: [String: Any] = [
+            "version" : 1,
 			"password": password,
 			"host": host,
 			"login": login,
