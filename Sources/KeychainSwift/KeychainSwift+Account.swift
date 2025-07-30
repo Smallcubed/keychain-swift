@@ -128,7 +128,12 @@ extension KeychainSwift {
 		if let acct = account as? KeychainWithSMTPAccount {
 			smtpIdent = acct.preferredSMTPAccountIdentifier
 		}
-		let model = AccountModel(passwordData: passwordData, host: account.hostname, port: account.portNumber, ssl: account.ssl, login: account.loginName, smtpIdent: smtpIdent)
+		let model = AccountModel(passwordData: passwordData, 
+                                 host: account.keychainHostName,
+                                 port: account.portNumber,
+                                 ssl: account.ssl,
+                                 login: account.loginName,
+                                 smtpIdent: smtpIdent)
 		do {
 			let encoder = JSONEncoder()
 			let data: Data = try encoder.encode(model)

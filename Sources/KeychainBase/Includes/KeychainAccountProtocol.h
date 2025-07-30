@@ -22,6 +22,7 @@ NS_ASSUME_NONNULL_BEGIN
 
 
 @property (copy, readonly) NSString * hostname;
+@property (copy, readonly) NSString * keychainHostName;
 @property (readonly) NSInteger portNumber;
 @property (readonly) BOOL ssl;
 @property (copy, readonly) NSString * loginName;
