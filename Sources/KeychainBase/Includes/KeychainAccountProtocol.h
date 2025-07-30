@@ -18,6 +18,8 @@ NS_ASSUME_NONNULL_BEGIN
 
 @property (strong, readonly, nullable) NSString * keychainLegacyLabel;
 @property (strong, readonly, nullable) NSString * keychainLegacyAccountName;
+@property (strong, readonly, nullable) NSString * keychainLegacyServiceName;
+
 
 @property (copy, readonly) NSString * hostname;
 @property (readonly) NSInteger portNumber;

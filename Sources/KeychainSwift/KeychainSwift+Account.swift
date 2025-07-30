@@ -12,24 +12,42 @@ import SCBaseKit
 extension KeychainSwift {
 	
 	func password(account: KeychainAccount, service: String? = nil) -> String? {
-		if let pw = get(account.keychainAccountName, service: service ?? account.keychainServiceName, label: account.keychainLabelName) {
+        let service = service ?? account.keychainServiceName
+		if let pw = get(account.keychainAccountName, service: service, label: account.keychainLabelName) {
             let logValue = (pw.data(using: .utf8) as? NSData)?.randomTruncatedSHAHash ?? ""
             
-            log(string: "[Keychain] FOUND pw \(logValue) for Name: \(account.keychainAccountName) s:\(service ?? account.keychainServiceName) l:\(account.keychainLabelName) account:\(account)")
+            log(string: "[Keychain] FOUND pw \(logValue) for Name: \(account.keychainAccountName) s:\(service) l:\(account.keychainLabelName) account:\(account)")
 			return pw
 		}
       
-		if let pw = migratePassword(account.keychainAccountName, service: service ?? account.keychainServiceName, label: account.keychainLabelName) {
+		if let pw = migratePassword(account.keychainAccountName, service: service, label: account.keychainLabelName) {
             let logValue = (pw.data(using: .utf8) as? NSData)?.randomTruncatedSHAHash ?? ""
            
-            log(string: "[Keychain] Migrated pw \(logValue) for \(account.keychainAccountName) s:\(service ?? account.keychainServiceName) l:\(account.keychainLabelName) account: \(account)")
+            log(string: "[Keychain] Migrated pw \(logValue) for \(account.keychainAccountName) s:\(service) l:\(account.keychainLabelName) account: \(account)")
 			return pw
 		}
-        if let accountName = account.keychainLegacyAccountName, let label = account.keychainLegacyLabel ,
-           let pw = get(accountName, service: service ?? account.keychainServiceName, label: label){
+        // legacy account identifiers for smtp account
+        // for a time period smtp accounts used associated incoming (IMAP) account name and label for
+        // accessing keychain data.
+        // This is incorrect and should be updated.
+        
+        let legacyService = account.keychainLegacyServiceName
+        if let legacyName = account.keychainLegacyAccountName,
+           let legacyLabel = account.keychainLegacyLabel ,
+           let pw = get(legacyName, service: legacyService, label: legacyLabel){
             // shoud we migrate this pw into the current format?
+            
             let logValue = (pw.data(using: .utf8) as? NSData)?.randomTruncatedSHAHash ?? ""
-            log(string: "[Keychain] FOUND pw \(logValue) for LEGACYNAME \(accountName) s:\(service ?? account.keychainServiceName) l:\(label) account: \(account)")
+            
+            log(string: "[Keychain] FOUND pw \(logValue) for LEGACYNAME \(legacyName) s:\(service) l:\(legacyLabel) account: \(account)")
+            set(pw, forKey: account.keychainAccountName, service: service, label: account.keychainLabelName)
+            if let rereadPw = get(account.keychainAccountName, service: service, label: account.keychainLabelName){
+                
+                if (rereadPw == pw){
+                    log(string: "[Keychain] Migrated pw \(logValue) to \(account.keychainAccountName) s:\(service) l:\(account.keychainLabelName) account: \(account)")
+                    return rereadPw
+                }
+            }
             return pw
         }
         if (account.authenticationMethod != "XOAUTH2"){
