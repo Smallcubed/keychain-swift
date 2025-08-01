@@ -29,7 +29,6 @@ NS_ASSUME_NONNULL_BEGIN
 @property (strong, readonly) NSString * loginPassword;
 @property (strong, readonly) NSString * authenticationMethod;
 @property (readonly) NSString* displayName; // the user facing name of the account
-- (void)resetInternalPassword;
 
 @end
 

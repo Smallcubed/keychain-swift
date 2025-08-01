@@ -96,7 +96,7 @@ extension KeychainSwift {
 	
 	func set(_ passwordData: Data, account: KeychainAccount) -> Bool {
 		let result = set(passwordData, forKey: account.keychainAccountName, service: account.keychainServiceName, label: account.keychainLabelName)
-		account.resetInternalPassword()
+//		account.resetInternalPassword()
 		store(account: account)
 		return result
 	}

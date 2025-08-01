@@ -120,9 +120,7 @@ open class KeychainSwift {
         if let service {  logKey += " *️⃣\(service)"}
         if let label {  logKey += " #️⃣\(label)" }
         
-        
         let prefixedKey = keyWithPrefix(key)
-        
         
         var query: [String: Any] = [
             KeychainSwiftConstants.klass       : kSecClassGenericPassword,
@@ -156,11 +154,11 @@ open class KeychainSwift {
             }
             attemptCount += 1
         }
-        if let resultData = result as? NSData{
+        if result is NSData{
 //            log(string:"[GET \(requestIdx)] \(logKey) 🟢 \(resultData.randomTruncatedSHAHash)" )
         }
         else {
-//            log(string:"[GET \(requestIdx)] \(logKey) 🛑 Could not retrieve data")
+            log(string:"[GET \(requestIdx)] \(logKey) 🛑 Could not retrieve data")
         }
         return result as? Data
     }
