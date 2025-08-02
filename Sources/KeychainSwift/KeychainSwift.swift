@@ -251,8 +251,7 @@ open class KeychainSwift {
         KeychainSwift._requestIdx_ += 1
         let requestIdx = KeychainSwift._requestIdx_
         
-        //deleteNoLock(key, service: service, label: label) // Delete any existing key before saving it
- 
+       
 		let accessible = access?.value ?? overrideAccessOption.value
 		
 		let prefixedKey = keyWithPrefix(key)
@@ -275,7 +274,10 @@ open class KeychainSwift {
 //                log(string:"[SET \(requestIdx)] \(logKey) 🟢 Data is unchanged! returning" )
 //                return true
 //            }
-            if !deleteNoLock(key, service: service, label: label) {
+           
+        }
+        if !deleteNoLock(key, service: service, label: label) {
+            if lastResultCode != errSecItemNotFound {
                 log(string:"[SET \(requestIdx)] 🛑 Could not delete old key error: \(lastResultErrorDescription)" )
             }
         }
@@ -294,7 +296,7 @@ open class KeychainSwift {
             }
         }
         else{
-            log(string:"[SET \(requestIdx)] \(logKey) 🛑 Could not set data \((value as NSData).randomTruncatedSHAHash) error: \(lastResultCode)")
+            log(string:"[SET \(requestIdx)] \(logKey) 🛑 Could not set data \((value as NSData).randomTruncatedSHAHash) error: \(lastResultErrorDescription)")
         }
 		return lastResultCode == noErr
 	}
