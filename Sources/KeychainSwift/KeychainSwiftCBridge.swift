@@ -222,6 +222,13 @@ public class KeychainSwiftCBridge: NSObject {
 	open func password(account: KeychainAccount) -> String? {
 		return keychain.password(account: account)
 	}
+    @objc (entryWithIdentifier:)
+    open func entry(identifier:String) -> SCKeychainItem? {
+        if let identifierData = NSData(fromBase64String: identifier) as? Data{
+            return keychain.get(identifierData)
+        }
+        return nil
+    }
 	
 	@objc(dataForAccount:)
 	open func data(account: KeychainAccount) -> Data? {
@@ -234,6 +241,18 @@ public class KeychainSwiftCBridge: NSObject {
 		return keychain.deletePassword(account: account)
 	}
 	
+    @objc(deleteEntry:)
+    @discardableResult
+    open func delete(entry:SCKeychainItem)-> Bool{
+        if let identifier = entry.identifier,
+           let identifierData = NSData(fromBase64String: identifier) as? Data{
+            return keychain.delete(identifierData)
+        }
+        return false
+    }
+    
+    
+    
 	@objc(deleteInfoForAccount:)
 	@discardableResult
 	open func deleteInfo(account: KeychainAccount) -> Bool {
@@ -257,4 +276,19 @@ public class KeychainSwiftCBridge: NSObject {
 		return keychain.retrieve(account: account)
 	}
 	
+    @objc(fetchEntriesForAccount:)
+    open func fetch(_ account: KeychainAccount) ->[SCKeychainItem]?{
+        return keychain.fetchEntriesFor(account.keychainAccountName)
+    }
+    @objc
+    open func allEntriesByIdentifier()  -> [String:SCKeychainItem]{
+        var  keysById : [String : SCKeychainItem]  = [:]
+        for entry in keychain.allEntries{
+            if let identifier = entry.identifier{
+                keysById[identifier] = entry
+            }
+        }
+        return keysById
+    }
+    
 }

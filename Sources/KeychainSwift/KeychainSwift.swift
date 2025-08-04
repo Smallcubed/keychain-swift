@@ -8,96 +8,189 @@ A collection of helper functions for saving text and data in the keychain.
 
 */
 open class KeychainSwift {
-	
-	var lastQueryParameters: [String: Any]? // Used by the unit tests
-	
-	/// Contains result code from the last operation. Value is noErr (0) for a successful result.
-	open var lastResultCode: OSStatus = noErr
-	
-	var keyPrefix = "" // Can be useful in test.
-	
-	/**
-	 
-	 Specify an access group that will be used to access keychain items. Access groups can be used to share keychain items between applications. When access group value is nil all application access groups are being accessed. Access group name is used by all functions: set, get, delete and clear.
-	 
-	 */
-	open var accessGroup: String?
-	
-	/**
-	 
-	 Specifies whether the items can be synchronized with other devices through iCloud. Setting this property to true will
-	 add the item to other devices with the `set` method and obtain synchronizable items with the `get` command. Deleting synchronizable items will remove them from all devices. In order for keychain synchronization to work the user must enable "Keychain" in iCloud settings.
-	 
-	 */
-	open var synchronizable: Bool = false
-	
-	/**
-	 
-	 Specifies a service name to be used for all passwords.
-	 
-	 */
-	open var serviceName: String?
-	
-	/**
-	 
-	 Specify whether or not a file based keychain should be used. This is for compatibility reasons on macOS, the default is always `false`. If this is set it will override the `accessGroup` & `synchronizable` values, since those are not available for file keychains. `UseFileKeychain` is used by all functions: set, get, delete and clear.
-	 
-	 */
-	open var useFileKeychain: Bool = false
-	
-	/**
-	 Set a default accessOptions override for the keychain
-	 */
-	open var overrideAccessOption: KeychainSwiftAccessOptions = .defaultOption
-	
+    
+    var lastQueryParameters: [String: Any]? // Used by the unit tests
+    
+    /// Contains result code from the last operation. Value is noErr (0) for a successful result.
+    open var lastResultCode: OSStatus = noErr
+    
+    var keyPrefix = "" // Can be useful in test.
+    
+    /**
+     
+     Specify an access group that will be used to access keychain items. Access groups can be used to share keychain items between applications. When access group value is nil all application access groups are being accessed. Access group name is used by all functions: set, get, delete and clear.
+     
+     */
+    open var accessGroup: String?
+    
+    /**
+     
+     Specifies whether the items can be synchronized with other devices through iCloud. Setting this property to true will
+     add the item to other devices with the `set` method and obtain synchronizable items with the `get` command. Deleting synchronizable items will remove them from all devices. In order for keychain synchronization to work the user must enable "Keychain" in iCloud settings.
+     
+     */
+    open var synchronizable: Bool = false
+    
+    /**
+     
+     Specifies a service name to be used for all passwords.
+     
+     */
+    open var serviceName: String?
+    
+    /**
+     
+     Specify whether or not a file based keychain should be used. This is for compatibility reasons on macOS, the default is always `false`. If this is set it will override the `accessGroup` & `synchronizable` values, since those are not available for file keychains. `UseFileKeychain` is used by all functions: set, get, delete and clear.
+     
+     */
+    open var useFileKeychain: Bool = false
+    
+    /**
+     Set a default accessOptions override for the keychain
+     */
+    open var overrideAccessOption: KeychainSwiftAccessOptions = .defaultOption
+    
     private var lastResultErrorDescription: String {
         return SecCopyErrorMessageString(lastResultCode, nil) as? String ?? "Code \(lastResultCode)"
     }
-	
-	private let lock = NSRecursiveLock()
-	private let recurseMax: Int = 10
-
+    
+    private let lock = NSRecursiveLock()
+    private let recurseMax: Int = 10
+    
     private static var _requestIdx_ : Int = 0
-	/**
-	 
-	 - parameter keyPrefix: a prefix that is added before the key in get/set methods. Note that `clear` method still clears everything from the Keychain.
-	 - parameter service: a value that is added as the service in get/set methods.
-
-	 */
-	public init(keyPrefix: String? = nil, service: String? = nil) {
-		self.keyPrefix = keyPrefix ?? ""
-		self.serviceName = service
-	}
-	
+    /**
+     
+     - parameter keyPrefix: a prefix that is added before the key in get/set methods. Note that `clear` method still clears everything from the Keychain.
+     - parameter service: a value that is added as the service in get/set methods.
+     
+     */
+    public init(keyPrefix: String? = nil, service: String? = nil) {
+        self.keyPrefix = keyPrefix ?? ""
+        self.serviceName = service
+    }
+    
     open func log(string: String){
         SCLogger(forSubsystem: "Authorization")?.log(string: string)
     }
-	
-	//	MARK: - Get Methods
-	
-	/**
-	 
-	 Retrieves the text value from the keychain that corresponds to the given key.
-	 
-	 - parameter key: The key that is used to read the keychain item.
-	 - parameter service: The service name that is used to read the keychain item.
-	 - parameter label: The label that is used to read the keychain item.
-	 - returns: The text value from the keychain. Returns nil if unable to read the item.
-	 
-	 */
-	open func get(_ key: String, service: String? = nil, label: String? = nil) -> String? {
-		if let data = getData(key, service: service, label: label) {
-			
-			if let currentString = String(data: data, encoding: .utf8) {
-				return currentString
-			}
-			
-			lastResultCode = -67853 // errSecInvalidEncoding
-		}
-		
-		return nil
-	}
-	
+    
+    //	MARK: - Get Methods
+    
+    /**
+     
+     Retrieves the text value from the keychain that corresponds to the given key.
+     
+     - parameter key: The key that is used to read the keychain item.
+     - parameter service: The service name that is used to read the keychain item.
+     - parameter label: The label that is used to read the keychain item.
+     - returns: The text value from the keychain. Returns nil if unable to read the item.
+     
+     */
+    
+    open func get(_ keychainIdentifier: Data) -> SCKeychainItem? {
+        
+        
+        lock.lock()
+        defer { lock.unlock() }
+        let query: [String: Any] = [
+            KeychainSwiftConstants.klass       : kSecClassGenericPassword,
+            kSecValuePersistentRef as String : keychainIdentifier,
+            KeychainSwiftConstants.returnReference : kCFBooleanTrue!,
+            KeychainSwiftConstants.returnData : kCFBooleanTrue!,
+            KeychainSwiftConstants.returnAttributes : kCFBooleanTrue!,
+            KeychainSwiftConstants.matchLimit  : kSecMatchLimitOne
+        ]
+        
+        lastQueryParameters = query
+        
+        var result: AnyObject?
+        
+        var lastResultCode = withUnsafeMutablePointer(to: &result) {
+            SecItemCopyMatching(query as CFDictionary, UnsafeMutablePointer($0))
+        }
+        var attemptCount = 1
+        while (lastResultCode == errSecInteractionNotAllowed && attemptCount < recurseMax){
+            log(string:"[GET] ⚠️ Keychain is not yet available -- trying again in .5 seconds")
+            Thread.sleep(until: Date(timeIntervalSinceNow: 0.5))
+            lastResultCode = withUnsafeMutablePointer(to: &result) {
+                SecItemCopyMatching(query as CFDictionary, UnsafeMutablePointer($0))
+            }
+            attemptCount += 1
+        }
+        if  lastResultCode == noErr {
+            if let rep = result as? Dictionary<String, Any>{
+                let entry = SCKeychainItem(rep)
+                return entry
+            }
+        }
+        else{
+            log(string:"[GET] 🛑 Could not get keychain item with identifier \(keychainIdentifier.base64EncodedString()):  code:\(lastResultCode) msg:\(lastResultErrorDescription)")
+        }
+        
+        return nil
+    }
+    
+    open func get(_ key: String, service: String? = nil, label: String? = nil) -> String? {
+        if let data = getData(key, service: service, label: label) {
+            
+            if let currentString = String(data: data, encoding: .utf8) {
+                return currentString
+            }
+            
+            lastResultCode = -67853 // errSecInvalidEncoding
+        }
+        
+        return nil
+    }
+    
+    open func fetchEntriesFor(_ account:String)-> [SCKeychainItem]?{
+        lock.lock()
+        defer { lock.unlock() }
+        let prefixedKey = keyWithPrefix(account)
+        
+        var query: [String: Any] = [
+            KeychainSwiftConstants.klass       : kSecClassGenericPassword,
+            KeychainSwiftConstants.attrAccount : prefixedKey,
+            KeychainSwiftConstants.returnReference : kCFBooleanTrue!,
+            KeychainSwiftConstants.returnData : kCFBooleanTrue!,
+            KeychainSwiftConstants.returnAttributes : kCFBooleanTrue!,
+            KeychainSwiftConstants.matchLimit  : kSecMatchLimitAll
+        ]
+        query = addDataProtection(query)
+        query = addAccessGroupWhenPresent(query)
+        query = addSynchronizableIfRequired(query, addingItems: false)
+        lastQueryParameters = query
+        
+        var result: AnyObject?
+        
+        var lastResultCode = withUnsafeMutablePointer(to: &result) {
+            SecItemCopyMatching(query as CFDictionary, UnsafeMutablePointer($0))
+        }
+        var attemptCount = 1
+        while (lastResultCode == errSecInteractionNotAllowed && attemptCount < recurseMax){
+            log(string:" ⚠️ Keychain is not yet available -- trying again in .5 seconds")
+            Thread.sleep(until: Date(timeIntervalSinceNow: 0.5))
+            lastResultCode = withUnsafeMutablePointer(to: &result) {
+                SecItemCopyMatching(query as CFDictionary, UnsafeMutablePointer($0))
+            }
+            attemptCount += 1
+        }
+        
+        if let reps = result as? NSArray{
+            var entries = [SCKeychainItem]()
+            
+            for rep in reps{
+                if let rep = rep as? [String: Any]{
+                    let entry  = SCKeychainItem(rep)
+                    entries.append(entry)
+                }
+            }
+            return entries
+        }
+        
+        log(string:"[Fetch ] \(account) 🛑 Could not retrieve data")
+        
+        return nil
+    }
 	/**
 	 
 	 Retrieves the data from the keychain that corresponds to the given key.
@@ -154,10 +247,7 @@ open class KeychainSwift {
             }
             attemptCount += 1
         }
-        if result is NSData{
-//            log(string:"[GET \(requestIdx)] \(logKey) 🟢 \(resultData.randomTruncatedSHAHash)" )
-        }
-        else {
+        if !(result is NSData) {
             log(string:"[GET \(requestIdx)] \(logKey) 🛑 Could not retrieve data")
         }
         return result as? Data
@@ -347,6 +437,22 @@ open class KeychainSwift {
 		return deleteNoLock(key, service: service, label: label)
 	}
 	
+    open func delete(_ keychainIdentifier: Data) -> Bool {
+        lock.lock()
+        defer { lock.unlock() }
+        let query: [String: Any] = [
+            KeychainSwiftConstants.klass       : kSecClassGenericPassword,
+            kSecValuePersistentRef as String : keychainIdentifier
+        ]
+        lastQueryParameters = query
+        
+        lastResultCode = SecItemDelete(query as CFDictionary)
+        if (lastResultCode != noErr){
+            log(string:"[DELETE ] 🛑 Could not delete entry for \(keychainIdentifier.base64EncodedString()) error: \(lastResultErrorDescription)" )
+        }
+        
+        return lastResultCode == noErr
+    }
 	/**
 	 
 	 Same as `delete` but is only accessed internally, since it is not thread safe.
@@ -490,6 +596,36 @@ open class KeychainSwift {
 		
 		return []
 	}
+    
+    public var allEntries: [SCKeychainItem] {
+        var query: [String: Any] = [
+            KeychainSwiftConstants.klass : kSecClassGenericPassword,
+            KeychainSwiftConstants.returnData : true,
+            KeychainSwiftConstants.returnAttributes: true,
+            KeychainSwiftConstants.returnReference: true,
+            KeychainSwiftConstants.matchLimit: KeychainSwiftConstants.secMatchLimitAll
+        ]
+        
+        query = addServiceName(query, override: nil)
+        query = addDataProtection(query)
+        query = addAccessGroupWhenPresent(query)
+        query = addSynchronizableIfRequired(query, addingItems: false)
+        
+        var result: AnyObject?
+        
+        let lastResultCode = withUnsafeMutablePointer(to: &result) {
+            SecItemCopyMatching(query as CFDictionary, UnsafeMutablePointer($0))
+        }
+        
+        if lastResultCode == noErr {
+            return (result as? [[String: Any]])?.compactMap {
+                SCKeychainItem($0)
+            } ?? []
+        }
+        
+        return []
+    }
+    
 	
 	/// Returns the key with currently set prefix.
 	func keyWithPrefix(_ key: String) -> String {
@@ -579,4 +715,66 @@ open class KeychainSwift {
 		return result
 	}
 	
+}
+
+
+open class SCKeychainItem : NSObject {
+    
+    var rawDictionary : [String:Any]?
+    
+    @objc public
+    func password() -> String? {
+        if let passwordData = rawDictionary?[ kSecValueData as String] as? Data {
+            return String(data: passwordData, encoding: .utf8)
+        }
+        return nil
+    }
+    
+    @objc public
+    var passwordPII : String? {
+        if let nsData = rawDictionary?[kSecValueData as String] as? NSData {
+            return  "<PII: \(nsData.randomTruncatedSHAHash)"
+        }
+        return "<PII: NIL>"
+    }
+    @objc public
+    var identifier : String? {
+        let data = rawDictionary?[kSecValuePersistentRef as String] as? Data
+        return data?.base64EncodedString()
+    }
+    
+    @objc public
+    var service :  String? {
+        return rawDictionary?[kSecAttrService as String] as? String
+    }
+    
+    @objc public
+    var label:  String? {
+        return rawDictionary?[kSecAttrLabel as String] as? String
+    }
+    
+    @objc public
+    var account:  String? {
+        return rawDictionary?[kSecAttrAccount as String] as? String
+    }
+    @objc public
+    var isProvisional : Bool {
+        return self.identifier == nil
+    }
+    @objc public
+    var dictionaryRepresentation:  [String :Any]? {
+        return rawDictionary
+    }
+    
+    @objc init(_ rep : [String:Any]){
+        self.rawDictionary = rep
+    }
+    
+
+    @objc public override var description:  String {
+        let acct = account ?? "-"
+        let srvc = service ?? "-"
+        let lbl = label ?? "-"
+        return super.description.appending(" Account: \(acct) Service : \(srvc) Label: \(lbl)")
+    }
 }

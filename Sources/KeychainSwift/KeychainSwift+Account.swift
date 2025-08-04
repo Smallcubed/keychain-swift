@@ -179,3 +179,16 @@ struct AccountModel: Codable {
 		return res
 	}
 }
+
+
+extension SCKeychainItem {
+    @objc(newWithAccount:provisionalPassword:)
+    public class func newWith(_ account: KeychainAccount, provisionalPassword: String) -> SCKeychainItem {
+        var rep : [String : Any] = [:]
+        rep[kSecValueData as String] = provisionalPassword.data(using: .utf8)
+        rep[kSecAttrLabel as String] = account.keychainLabelName
+        rep[kSecAttrAccount as String] = account.keychainAccountName
+        rep[kSecAttrService as String] = account.keychainServiceName
+        return SCKeychainItem(rep)
+    }
+}
