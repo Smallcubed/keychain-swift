@@ -133,7 +133,7 @@ open class KeychainSwift {
         } else {
             query[KeychainSwiftConstants.returnData] =  kCFBooleanTrue
         }
-        query = addLabel(query, label: label)
+//        query = addLabel(query, label: label) // this may be actually interfering with getting data.
         query = addServiceName(query, override: service)
         query = addDataProtection(query)
         query = addAccessGroupWhenPresent(query)
