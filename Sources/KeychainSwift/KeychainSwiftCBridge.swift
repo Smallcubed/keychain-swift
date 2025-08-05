@@ -68,55 +68,55 @@ public class KeychainSwiftCBridge: NSObject {
 	
 	@objc(setPassword:forKey:)
 	@discardableResult
-	open func set(_ value: String, forKey key: String) -> Bool {
-		return keychain.set(value, forKey: key)
+	open func set(_ value: String, forKey key: String) -> SCKeychainItem? {
+		return try keychain.set(value, forKey: key)
 	}
 	
 	@objc(setPassword:forKey:service:)
 	@discardableResult
-	open func set(_ value: String, forKey key: String, service: String) -> Bool {
+	open func set(_ value: String, forKey key: String, service: String) -> SCKeychainItem? {
 		return keychain.set(value, forKey: key, service: service)
 	}
 	
 	@objc(setPassword:forKey:service:label:)
 	@discardableResult
-	open func set(_ value: String, forKey key: String, service: String, label: String) -> Bool {
+	open func set(_ value: String, forKey key: String, service: String, label: String) -> SCKeychainItem? {
 		return keychain.set(value, forKey: key, service: service, label: label)
 	}
 	
 	@objc(setData:forKey:)
 	@discardableResult
-	open func setData(_ value: Data, forKey key: String) -> Bool {
+	open func setData(_ value: Data, forKey key: String) -> SCKeychainItem? {
 		return keychain.set(value, forKey: key)
 	}
 	
 	@objc(setData:forKey:service:)
 	@discardableResult
-	open func setData(_ value: Data, forKey key: String, service: String) -> Bool {
+	open func setData(_ value: Data, forKey key: String, service: String) -> SCKeychainItem? {
 		return keychain.set(value, forKey: key, service: service)
 	}
 	
 	@objc(setData:forKey:service:label:)
 	@discardableResult
-	open func setData(_ value: Data, forKey key: String, service: String, label: String) -> Bool {
+	open func setData(_ value: Data, forKey key: String, service: String, label: String) -> SCKeychainItem? {
 		return keychain.set(value, forKey: key, service: service, label: label)
 	}
 	
 	@objc(setBool:forKey:)
 	@discardableResult
-	open func setBool(_ value: Bool, forKey key: String) -> Bool {
+	open func setBool(_ value: Bool, forKey key: String) -> SCKeychainItem? {
 		return keychain.set(value, forKey: key)
 	}
 	
 	@objc(setBool:forKey:service:)
 	@discardableResult
-	open func setBool(_ value: Bool, forKey key: String, service: String) -> Bool {
+	open func setBool(_ value: Bool, forKey key: String, service: String) -> SCKeychainItem? {
 		return keychain.set(value, forKey: key, service: service)
 	}
 	
 	@objc(setBool:forKey:service:label:)
 	@discardableResult
-	open func setBool(_ value: Bool, forKey key: String, service: String, label: String) -> Bool {
+	open func setBool(_ value: Bool, forKey key: String, service: String, label: String) -> SCKeychainItem? {
 		return keychain.set(value, forKey: key, service: service, label: label)
 	}
 	
@@ -224,10 +224,8 @@ public class KeychainSwiftCBridge: NSObject {
 	}
     @objc (entryWithIdentifier:)
     open func entry(identifier:String) -> SCKeychainItem? {
-        if let identifierData = NSData(fromBase64String: identifier) as? Data{
-            return keychain.get(identifierData)
-        }
-        return nil
+        let identifierData = NSData(fromBase64String: identifier) as Data
+        return keychain.get(identifierData)
     }
 	
 	@objc(dataForAccount:)
@@ -261,13 +259,13 @@ public class KeychainSwiftCBridge: NSObject {
 	
 	@objc(setPassword:forAccount:)
 	@discardableResult
-	open func set(_ value: String, forAccount account: KeychainAccount) -> Bool {
+	open func set(_ value: String, forAccount account: KeychainAccount) -> SCKeychainItem? {
 		return keychain.set(value, account: account)
 	}
 	
 	@objc(setData:forAccount:)
 	@discardableResult
-	open func setData(_ value: Data, forAccount account: KeychainAccount) -> Bool {
+	open func setData(_ value: Data, forAccount account: KeychainAccount) -> SCKeychainItem? {
 		return keychain.set(value, account: account)
 	}
 	
@@ -289,6 +287,10 @@ public class KeychainSwiftCBridge: NSObject {
             }
         }
         return keysById
+    }
+    @objc(saveKeychainItem:)
+    open func save(keychainItem:SCKeychainItem){
+        
     }
     
 }

@@ -14,14 +14,14 @@ extension KeychainSwift {
 	func password(account: KeychainAccount, service: String? = nil) -> String? {
         let service = service ?? account.keychainServiceName
 		if let pw = get(account.keychainAccountName, service: service, label: account.keychainLabelName) {
-            let logValue = (pw.data(using: .utf8) as? NSData)?.randomTruncatedSHAHash ?? ""
+            let logValue = (pw.data(using: .utf8) as? NSData)?.privacyRepresentation ?? ""
             
             log(string: "[Keychain] FOUND pw \(logValue) for Name: \(account.keychainAccountName) s:\(service) l:\(account.keychainLabelName) account:\(account)")
 			return pw
 		}
       
 		if let pw = migratePassword(account.keychainAccountName, service: service, label: account.keychainLabelName) {
-            let logValue = (pw.data(using: .utf8) as? NSData)?.randomTruncatedSHAHash ?? ""
+            let logValue = (pw.data(using: .utf8) as? NSData)?.privacyRepresentation ?? ""
            
             log(string: "[Keychain] Migrated pw \(logValue) for \(account.keychainAccountName) s:\(service) l:\(account.keychainLabelName) account: \(account)")
 			return pw
@@ -37,7 +37,7 @@ extension KeychainSwift {
            let pw = get(legacyName, service: legacyService, label: legacyLabel){
             // shoud we migrate this pw into the current format?
             
-            let logValue = (pw.data(using: .utf8) as? NSData)?.randomTruncatedSHAHash ?? ""
+            let logValue = (pw.data(using: .utf8) as? NSData)?.privacyRepresentation ?? ""
             
             log(string: "[Keychain] FOUND pw \(logValue) for LEGACYNAME \(legacyName) s:\(service) l:\(legacyLabel) account: \(account)")
             set(pw, forKey: account.keychainAccountName, service: service, label: account.keychainLabelName)
@@ -58,13 +58,13 @@ extension KeychainSwift {
 	
 	func data(account: KeychainAccount) -> Data? {
         if let data = getData(account.keychainAccountName, service: account.keychainServiceName, label: account.keychainLabelName) {
-            let logValue = (data as NSData).randomTruncatedSHAHash
+            let logValue = (data as NSData).privacyRepresentation
             log(string: "[Keychain] FOUND data \(logValue) for \(account.keychainAccountName) s:\(account.keychainServiceName) l:\(account.keychainLabelName)")
             
             return data
         }
         if let data =  migrateData(account.keychainAccountName, service: account.keychainServiceName, label: account.keychainLabelName) {
-            let logValue = (data as NSData).randomTruncatedSHAHash
+            let logValue = (data as NSData).privacyRepresentation
             log(string: "[Keychain] Migrated data \(logValue) for \(account.keychainAccountName) s:\(account.keychainServiceName) l:\(account.keychainLabelName)")
     
             return data
@@ -72,7 +72,7 @@ extension KeychainSwift {
         if let accountName = account.keychainLegacyAccountName, let label = account.keychainLegacyLabel ,
            let data = getData(accountName, service: account.keychainServiceName, label: label){
             // shoud we migrate this pw into the current format?
-            let logValue = (data as NSData).randomTruncatedSHAHash
+            let logValue = (data as NSData).privacyRepresentation
             log(string: "[Keychain] FOUND data \(logValue) for LEGACY \(accountName) s:\(account.keychainServiceName) l:\(label)")
       
             return data
@@ -87,14 +87,14 @@ extension KeychainSwift {
 		return delete(account.keychainAccountName, service: account.keychainServiceName, label: account.keychainLabelName)
 	}
 	
-	func set(_ password: String, account: KeychainAccount) -> Bool {
+	func set(_ password: String, account: KeychainAccount) -> SCKeychainItem? {
 		if let value = password.data(using: String.Encoding.utf8) {
 			return set(value, account: account)
 		}
-		return false
+		return nil
 	}
 	
-	func set(_ passwordData: Data, account: KeychainAccount) -> Bool {
+	func set(_ passwordData: Data, account: KeychainAccount) -> SCKeychainItem? {
 		let result = set(passwordData, forKey: account.keychainAccountName, service: account.keychainServiceName, label: account.keychainLabelName)
 //		account.resetInternalPassword()
 		store(account: account)
@@ -120,9 +120,9 @@ extension KeychainSwift {
 	}
 	
 	@discardableResult
-	func store(account: KeychainAccount) -> Bool {
+	func store(account: KeychainAccount) -> SCKeychainItem? {
 		guard let passwordData = account.loginPassword.data(using: String.Encoding.utf8) else {
-			return false
+			return nil
 		}
 		var smtpIdent: String? = nil
 		if let acct = account as? KeychainWithSMTPAccount {
@@ -142,7 +142,7 @@ extension KeychainSwift {
 		catch {
 			print("Error encoding Accountmodel: \(error)")
 		}
-		return false
+		return nil
 	}
 	
 	func deleteStore(account: KeychainAccount) -> Bool {

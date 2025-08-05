@@ -104,7 +104,7 @@ open class KeychainSwift {
         
         var result: AnyObject?
         
-        var lastResultCode = withUnsafeMutablePointer(to: &result) {
+        lastResultCode = withUnsafeMutablePointer(to: &result) {
             SecItemCopyMatching(query as CFDictionary, UnsafeMutablePointer($0))
         }
         var attemptCount = 1
@@ -302,13 +302,13 @@ open class KeychainSwift {
 	@discardableResult
 	open func set(_ value: String, forKey key: String,
 				  service: String? = nil, label: String? = nil,
-				  withAccess access: KeychainSwiftAccessOptions? = nil) -> Bool {
+				  withAccess access: KeychainSwiftAccessOptions? = nil) -> SCKeychainItem? {
 		
 		if let value = value.data(using: String.Encoding.utf8) {
-			return set(value, forKey: key, service: service, label: label, withAccess: access)
+			return  set(value, forKey: key, service: service, label: label, withAccess: access)
 		}
 		
-		return false
+		return nil
 	}
 	
 	/**
@@ -321,19 +321,19 @@ open class KeychainSwift {
 	 - parameter label: The label that is used to read the keychain item.
 	 - parameter withAccess: Value that indicates when your app needs access to the text in the keychain item. By default the .AccessibleWhenUnlocked option is used that permits the data to be accessed only while the device is unlocked by the user.
 	 
-	 - returns: True if the text was successfully written to the keychain.
+	 - returns: SCKeychainItem Identifier if successful
 	 
 	 */
 	@discardableResult
 	open func set(_ value: Data, forKey key: String,
 				  service: String? = nil, label: String? = nil,
-				  withAccess access: KeychainSwiftAccessOptions? = nil) -> Bool {
-		
-		// The lock prevents the code to be run simultaneously
-		// from multiple threads which may result in crashing
-		lock.lock()
-		defer { lock.unlock() }
-		
+                  withAccess access: KeychainSwiftAccessOptions? = nil) -> SCKeychainItem? {
+        
+        // The lock prevents the code to be run simultaneously
+        // from multiple threads which may result in crashing
+        lock.lock()
+        defer { lock.unlock() }
+        
         var logKey = "\(key) "
         if let service {  logKey += " *️⃣\(service)"}
         if let label {  logKey += " #️⃣\(label)" }
@@ -341,30 +341,34 @@ open class KeychainSwift {
         KeychainSwift._requestIdx_ += 1
         let requestIdx = KeychainSwift._requestIdx_
         
-       
-		let accessible = access?.value ?? overrideAccessOption.value
-		
-		let prefixedKey = keyWithPrefix(key)
-		
-		var query: [String : Any] = [
-			KeychainSwiftConstants.klass       : kSecClassGenericPassword,
-			KeychainSwiftConstants.attrAccount : prefixedKey,
-			KeychainSwiftConstants.valueData   : value,
-			KeychainSwiftConstants.accessible  : accessible
-		]
-		
-		query = addLabel(query, label: label)
-		query = addServiceName(query, override: service)
-		query = addDataProtection(query)
-		query = addAccessGroupWhenPresent(query)
-		query = addSynchronizableIfRequired(query, addingItems: true)
-		lastQueryParameters = query
+        
+        let accessible = access?.value ?? overrideAccessOption.value
+        
+        let prefixedKey = keyWithPrefix(key)
+        
+        var query: [String : Any] = [
+            KeychainSwiftConstants.klass       : kSecClassGenericPassword,
+            KeychainSwiftConstants.attrAccount : prefixedKey,
+            KeychainSwiftConstants.valueData   : value,
+            KeychainSwiftConstants.accessible  : accessible,
+            KeychainSwiftConstants.returnReference : kCFBooleanTrue!,
+            KeychainSwiftConstants.returnData : kCFBooleanTrue!,
+            KeychainSwiftConstants.returnAttributes : kCFBooleanTrue!,
+            
+        ]
+        
+        query = addLabel(query, label: label)
+        query = addServiceName(query, override: service)
+        query = addDataProtection(query)
+        query = addAccessGroupWhenPresent(query)
+        query = addSynchronizableIfRequired(query, addingItems: true)
+        lastQueryParameters = query
         if let currentData = getDataNoLock(key,service: service, label:label, requestIndex:requestIdx){
-//            guard currentData != value else{
-//                log(string:"[SET \(requestIdx)] \(logKey) 🟢 Data is unchanged! returning" )
-//                return true
-//            }
-           
+            //            guard currentData != value else{
+            //                log(string:"[SET \(requestIdx)] \(logKey) 🟢 Data is unchanged! returning" )
+            //                return true
+            //            }
+            
         }
         if !deleteNoLock(key, service: service, label: label) {
             if lastResultCode != errSecItemNotFound {
@@ -372,24 +376,32 @@ open class KeychainSwift {
             }
         }
         
-        lastResultCode = SecItemAdd(query as CFDictionary, nil)
-    
+        var result: AnyObject?
+        
+        let lastResultCode = withUnsafeMutablePointer(to: &result) {
+            SecItemAdd(query as CFDictionary, UnsafeMutablePointer($0))
+        }
+        var entry : SCKeychainItem?
         if (lastResultCode == noErr){
-            log(string:"[SET \(requestIdx)] \(logKey) 🟢 \((value as NSData).randomTruncatedSHAHash)" )
+            if let rep = result as? [String: Any]{
+                entry = SCKeychainItem(rep)
+            }
+            log(string:"[SET \(requestIdx)] \(logKey) 🟢 \((value as NSData).privacyRepresentation)" )
             if let rereadData = getDataNoLock(key,service: service, label:label, requestIndex:requestIdx){
                 if (value != rereadData){
-                    log(string:"[Valid \(requestIdx)] \(logKey) 🛑 readData (\((rereadData as NSData).randomTruncatedSHAHash)) does not match setData: \((value as NSData).randomTruncatedSHAHash)" )
+                    log(string:"[Valid \(requestIdx)] \(logKey) 🛑 readData (\((rereadData as NSData).privacyRepresentation)) does not match setData: \((value as NSData).privacyRepresentation)" )
                 }
             }
             else{
-                log(string:"[Valid \(requestIdx)] \(logKey) 🛑 readData NIL does not match setData: \((value as NSData).randomTruncatedSHAHash)" )
+                log(string:"[Valid \(requestIdx)] \(logKey) 🛑 readData NIL does not match setData: \((value as NSData).privacyRepresentation)" )
             }
+            
         }
         else{
-            log(string:"[SET \(requestIdx)] \(logKey) 🛑 Could not set data \((value as NSData).randomTruncatedSHAHash) error: \(lastResultErrorDescription)")
+            log(string:"[SET \(requestIdx)] \(logKey) 🛑 Could not set data \((value as NSData).privacyRepresentation) error: \(lastResultErrorDescription)")
         }
-		return lastResultCode == noErr
-	}
+        return entry
+    }
 	
 	/**
 	 
@@ -407,7 +419,7 @@ open class KeychainSwift {
 	@discardableResult
 	open func set(_ value: Bool, forKey key: String,
 				  service: String? = nil, label: String? = nil,
-				  withAccess access: KeychainSwiftAccessOptions? = nil) -> Bool {
+				  withAccess access: KeychainSwiftAccessOptions? = nil) -> SCKeychainItem? {
 		
 		let bytes: [UInt8] = value ? [1] : [0]
 		let data = Data(bytes)
@@ -530,11 +542,11 @@ open class KeychainSwift {
 	 - returns: The text value from the keychain. Returns nil if unable to read the item.
 	 
 	 */
-	open func migratePassword(_ key: String, service: String, label: String! = nil) -> String? {
+	open func migratePassword(_ key: String, service: String, label: String! = nil)  -> String? {
 		let fileKeychain = KeychainSwift()
 		fileKeychain.useFileKeychain = true
 		let value = fileKeychain.get(key, service: service)
-		if let pw = value, set(pw, forKey: key, service: service, label: label) {
+		if let pw = value, set(pw, forKey: key, service: service, label: label) != nil {
 			fileKeychain.delete(key, service: service, label: label)
 		}
 		return value
@@ -554,7 +566,7 @@ open class KeychainSwift {
 		let fileKeychain = KeychainSwift()
 		fileKeychain.useFileKeychain = true
 		let value = fileKeychain.getData(key, service: service)
-		if let pw = value, set(pw, forKey: key, service: service, label: label) {
+		if let pw = value, set(pw, forKey: key, service: service, label: label) != nil {
 			fileKeychain.delete(key, service: service, label: label)
 		}
 		return value
@@ -733,7 +745,7 @@ open class SCKeychainItem : NSObject {
     @objc public
     var passwordPII : String? {
         if let nsData = rawDictionary?[kSecValueData as String] as? NSData {
-            return  "<PII: \(nsData.randomTruncatedSHAHash)"
+            return nsData.privacyRepresentation
         }
         return "<PII: NIL>"
     }
@@ -772,9 +784,16 @@ open class SCKeychainItem : NSObject {
     
 
     @objc public override var description:  String {
+        var identifier = identifier ?? ""
+        if identifier.count > 0 {
+            identifier = " ID: \(identifier)"
+        }
+        else{
+            identifier = "❗️PROVISIONAL"
+        }
         let acct = account ?? "-"
         let srvc = service ?? "-"
         let lbl = label ?? "-"
-        return super.description.appending(" Account: \(acct) Service : \(srvc) Label: \(lbl)")
+        return super.description.appending("\(identifier) Account: \(acct) Service : \(srvc) Label: \(lbl)")
     }
 }
