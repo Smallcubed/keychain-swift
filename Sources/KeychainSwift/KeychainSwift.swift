@@ -735,6 +735,9 @@ open class SCKeychainItem : NSObject {
     var rawDictionary : [String:Any]?
     
     @objc public
+    var legacyIdentifier : String?
+    
+    @objc public
     func password() -> String? {
         if let passwordData = rawDictionary?[ kSecValueData as String] as? Data {
             return String(data: passwordData, encoding: .utf8)

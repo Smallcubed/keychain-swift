@@ -239,12 +239,20 @@ public class KeychainSwiftCBridge: NSObject {
 		return keychain.deletePassword(account: account)
 	}
 	
+    
+    @objc(deleteEntryWithIdentifier:)
+    @discardableResult
+    open func deleteEntryWithIdentifer(_ identifier:String?)-> Bool{
+        guard let identifier else {
+            return false
+        }
+        return keychain.delete(NSData(fromBase64String: identifier) as Data)
+    }
     @objc(deleteEntry:)
     @discardableResult
     open func delete(entry:SCKeychainItem)-> Bool{
-        if let identifier = entry.identifier,
-           let identifierData = NSData(fromBase64String: identifier) as? Data{
-            return keychain.delete(identifierData)
+        if let identifier = entry.identifier{
+           return keychain.delete(NSData(fromBase64String: identifier) as Data)
         }
         return false
     }
