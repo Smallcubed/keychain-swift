@@ -250,8 +250,9 @@ public class KeychainSwiftCBridge: NSObject {
     }
     @objc(deleteEntry:)
     @discardableResult
-    open func delete(entry:SCKeychainItem)-> Bool{
-        if let identifier = entry.identifier{
+    open func delete(entry:SCKeychainItem?)-> Bool{
+        if let entry,
+           let identifier = entry.identifier{
            return keychain.delete(NSData(fromBase64String: identifier) as Data)
         }
         return false
