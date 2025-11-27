@@ -191,4 +191,14 @@ extension SCKeychainItem {
         rep[kSecAttrService as String] = account.keychainServiceName
         return SCKeychainItem(rep)
     }
+    @objc(newWithAccount:accountInfoPassword:)
+    public class func newWith(_ account: KeychainAccount, accountInfoPassword: String) -> SCKeychainItem {
+        var rep : [String : Any] = [:]
+        rep[kSecAttrLabel as String] = account.keychainLabelName
+        rep[kSecAttrAccount as String] = account.keychainAccountName
+        rep[kSecAttrService as String] = account.keychainServiceName
+        let it = SCKeychainItem(rep)
+        it.accountInfoPassword = accountInfoPassword
+        return it
+    }
 }

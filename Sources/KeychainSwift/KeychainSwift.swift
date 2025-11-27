@@ -737,12 +737,17 @@ open class SCKeychainItem : NSObject {
     @objc public
     var legacyIdentifier : String?
     
+   
+    
+    @objc public
+    var accountInfoPassword : String?
+    
     @objc public
     func password() -> String? {
         if let passwordData = rawDictionary?[ kSecValueData as String] as? Data {
             return String(data: passwordData, encoding: .utf8)
         }
-        return nil
+        return accountInfoPassword
     }
     
     @objc public
