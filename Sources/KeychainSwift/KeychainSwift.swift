@@ -69,8 +69,8 @@ open class KeychainSwift {
         self.serviceName = service
     }
     
-    open func log(string: String) {
-		SCLogger(subsystemName: "Authorization").log(string: string)
+    open func log(string: String){
+        SCLogger(forSubsystem: "Authorization")?.log(string: string)
     }
     
     //	MARK: - Get Methods
