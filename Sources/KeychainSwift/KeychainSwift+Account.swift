@@ -173,7 +173,8 @@ struct AccountModel: Codable {
 			"port": port,
 			"ssl": ssl,
 		]
-		if let smtpIdent {
+        if let smtpIdent,
+           smtpIdent.count>0{
 			res["smtpIdent"] = smtpIdent
 		}
 		return res
