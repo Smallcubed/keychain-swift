@@ -254,7 +254,7 @@ open class KeychainSwift {
             attemptCount += 1
         }
         if !(result is NSData) {
-            log(string:"[KEYCHAIN-GET \(requestIdx)] \(logKey) 🛑 Could not retrieve data")
+            log(string:"[KEYCHAIN-GET \(requestIdx)] \(logKey) 🛑 Could not retrieve data: \(lastResultErrorDescription)")
         }
         return result as? Data
     }
@@ -369,12 +369,22 @@ open class KeychainSwift {
         query = addAccessGroupWhenPresent(query)
         query = addSynchronizableIfRequired(query, addingItems: true)
         lastQueryParameters = query
+        let reference = getDataNoLock(key,service: service, label:label, requestIndex:requestIdx,asReference: true)
+        
         if let currentData = getDataNoLock(key,service: service, label:label, requestIndex:requestIdx){
             guard currentData != value else{
                 log(string:"[KEYCHAIN-SET \(requestIdx)] \(logKey) ❗️ Data is unchanged! returning" )
                 return nil
             }
-            if !deleteNoLock(key, service: service, label: label,requestIndex: requestIdx) {
+            if let reference,
+               reference.count > 0{
+                if !deleteNoLock(reference, requestIndex: requestIdx){
+                    if lastResultCode != errSecItemNotFound {
+                        log(string:"[KEYCHAIN-SET \(requestIdx)] 🛑 Could not delete old key error: \(lastResultErrorDescription)" )
+                    }
+                }
+            }
+            else if !deleteNoLock(key, service: service, label: label,requestIndex: requestIdx) {
                 if lastResultCode != errSecItemNotFound {
                     log(string:"[KEYCHAIN-SET \(requestIdx)] 🛑 Could not delete old key error: \(lastResultErrorDescription)" )
                 }
@@ -465,7 +475,8 @@ open class KeychainSwift {
         
         let query: [String: Any] = [
             KeychainSwiftConstants.klass       : kSecClassGenericPassword,
-            kSecValuePersistentRef as String : keychainIdentifier
+            kSecValuePersistentRef as String : keychainIdentifier,
+            KeychainSwiftConstants.matchLimit  : kSecMatchLimitOne
         ]
         lastQueryParameters = query
         
@@ -516,6 +527,29 @@ open class KeychainSwift {
         
 		return lastResultCode == noErr
 	}
+    
+    @discardableResult
+    func deleteNoLock(_ keychainIdentifier:Data,
+                      requestIndex requestIdx: Int) -> Bool {
+        
+        var query: [String: Any] = [
+            KeychainSwiftConstants.klass       : kSecClassGenericPassword,
+            kSecValuePersistentRef as String : keychainIdentifier
+        ]
+        
+        query = addDataProtection(query)
+        query = addAccessGroupWhenPresent(query)
+        query = addSynchronizableIfRequired(query, addingItems: false)
+        lastQueryParameters = query
+        
+        lastResultCode = SecItemDelete(query as CFDictionary)
+        if (lastResultCode != noErr){
+            log(string:"[KEYCHAIN-DELETE \(requestIdx)] 🛑 Could not delete entry for \(keychainIdentifier.base64EncodedString()) error: \(lastResultErrorDescription)" )
+        }
+        
+        return lastResultCode == noErr
+    }
+    
 	
 	/**
 	 
@@ -740,6 +774,17 @@ open class KeychainSwift {
 		result[KeychainSwiftConstants.attrLabel] = theLabel
 		return result
 	}
+    
+    func addReference(_ items: [String: Any], reference: Data?) -> [String: Any] {
+        guard let theRef = reference else {
+            return items;
+        }
+        var result: [String: Any] = items
+        var refList : [Any] = result[KeychainSwiftConstants.matchItemList] as? [Any] ?? []
+        refList.append(theRef)
+        result[KeychainSwiftConstants.matchItemList] = refList
+        return result
+    }
 	
 }
 

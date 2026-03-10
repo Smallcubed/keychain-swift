@@ -34,6 +34,8 @@ public struct KeychainSwiftConstants {
 	/// Specifies the number of values returned from the keychain. The library only supports single values.
 	public static var matchLimit: String { return toString(kSecMatchLimit) }
 	
+    public static var matchItemList: String { return toString(kSecMatchItemList) }
+
 	/// A return data type used to get the data from the Keychain.
 	public static var returnData: String { return toString(kSecReturnData) }
 	

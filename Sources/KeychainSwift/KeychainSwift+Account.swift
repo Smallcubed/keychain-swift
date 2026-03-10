@@ -111,6 +111,7 @@ extension KeychainSwift {
 		do {
 			let decoder = JSONDecoder()
 			let model = try decoder.decode(AccountModel.self, from: data)
+            account.currentAccountInfoHash = (data as NSData).sha256String()
 			return model.dict()
 		}
 		catch {
@@ -121,12 +122,17 @@ extension KeychainSwift {
 	
 	@discardableResult
 	func store(account: KeychainAccount) -> SCKeychainItem? {
+        if (account.currentAccountInfoHash == nil){
+            let _ = retrieve(account: account)
+        }
 		guard let passwordData = account.loginPassword.data(using: String.Encoding.utf8) else {
 			return nil
 		}
 		var smtpIdent: String? = nil
-		if let acct = account as? KeychainWithSMTPAccount {
-			smtpIdent = acct.preferredSMTPAccountIdentifier
+		if let acct = account as? KeychainWithSMTPAccount,
+           let acctSmtpIdent = acct.preferredSMTPAccountIdentifier,
+           acctSmtpIdent.count>0{
+			smtpIdent = acctSmtpIdent
 		}
 		let model = AccountModel(passwordData: passwordData, 
                                  host: account.keychainHostName,
@@ -137,7 +143,11 @@ extension KeychainSwift {
 		do {
 			let encoder = JSONEncoder()
 			let data: Data = try encoder.encode(model)
-			return set(data, forKey: account.keychainAccountName, service: "\(AccountModel.serviceKey): \(account.keychainServiceName)", label: "\(account.keychainLabelName) (\(AccountModel.serviceKey))")
+            let hash = (data as NSData).sha256String()
+            if (hash != account.currentAccountInfoHash){
+                account.currentAccountInfoHash = hash
+                return set(data, forKey: account.keychainAccountName, service: "\(AccountModel.serviceKey): \(account.keychainServiceName)", label: "\(account.keychainLabelName) (\(AccountModel.serviceKey))")
+            }
 		}
 		catch {
 			print("Error encoding Accountmodel: \(error)")
