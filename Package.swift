@@ -13,7 +13,7 @@ let package = Package(
 		),
     ],
     dependencies: [
-        .package(name: "SCBaseKit", url: "git@bitbucket.org:smallcubed/smallcubed-foundation-code.git", branch: "Refactor/spm"),
+        .package(url: "git@bitbucket.org:smallcubed/smallcubed-foundation-code.git", branch: "Refactor/spm"),
     ],
     targets: [
 		.target(

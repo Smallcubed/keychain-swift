@@ -69,7 +69,7 @@ public class KeychainSwiftCBridge: NSObject {
 	@objc(setPassword:forKey:)
 	@discardableResult
 	open func set(_ value: String, forKey key: String) -> SCKeychainItem? {
-		return try keychain.set(value, forKey: key)
+		return keychain.set(value, forKey: key)
 	}
 	
 	@objc(setPassword:forKey:service:)
@@ -222,7 +222,7 @@ public class KeychainSwiftCBridge: NSObject {
 	open func password(account: KeychainAccount) -> String? {
 		return keychain.password(account: account)
 	}
-    @objc (entryWithIdentifier:)
+    @objc(entryWithIdentifier:)
     open func entry(identifier:String) -> SCKeychainItem? {
         let identifierData = NSData(fromBase64String: identifier) as Data
         return keychain.get(identifierData)
