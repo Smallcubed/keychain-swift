@@ -21,6 +21,7 @@ NS_ASSUME_NONNULL_BEGIN
 @property (strong, readonly, nullable) NSString * keychainLegacyServiceName;
 @property (strong, nullable) NSString * currentAccountInfoHash;
 
+@property (readonly) BOOL canSyncPassword;
 
 @property (copy, readonly) NSString * hostname;
 @property (copy, readonly) NSString * keychainHostName;
