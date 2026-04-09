@@ -8,18 +8,18 @@
 import AppKit;
 
 private struct AssociatedKeys {
-	static var keychain: UInt8 = 0
+	static var iCloudKeychain: UInt8 = 0
 	static var fileKeychain: UInt8 = 1
 }
 
 extension NSApplication {
 	@objc
-	public var keychain: KeychainSwiftCBridge {
+	public var iCloudKeychain: KeychainSwiftCBridge {
 		get {
-			return objc_getAssociatedObject(self, &AssociatedKeys.keychain) as! KeychainSwiftCBridge
+			return objc_getAssociatedObject(self, &AssociatedKeys.iCloudKeychain) as! KeychainSwiftCBridge
 		}
 		set {
-			objc_setAssociatedObject(self, &AssociatedKeys.keychain, newValue, .OBJC_ASSOCIATION_RETAIN)
+			objc_setAssociatedObject(self, &AssociatedKeys.iCloudKeychain, newValue, .OBJC_ASSOCIATION_RETAIN)
 		}
 	}
 	@objc

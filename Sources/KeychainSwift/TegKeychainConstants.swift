@@ -42,6 +42,9 @@ public struct KeychainSwiftConstants {
 	/// Used for specifying a value when setting a Keychain value.
 	public static var valueData: String { return toString(kSecValueData) }
 	
+	/// A value that corresponds to matching the persistent reference
+	public static var valuePersistentRef : String { return toString(kSecValuePersistentRef) }
+	
 	/// Used for returning a reference to the data from the keychain
 	public static var returnReference: String { return toString(kSecReturnPersistentRef) }
 	
@@ -50,6 +53,12 @@ public struct KeychainSwiftConstants {
 	
 	/// A value that corresponds to matching an unlimited number of items
 	public static var secMatchLimitAll : String { return toString(kSecMatchLimitAll) }
+	
+	/// A value that corresponds to matching an unlimited number of items
+	public static var keychainTypeKey : String { return "keychainType" }
+	
+	/// Key for the stored account identifier
+	public static var accountIdentifierKey : String { return "keychain_identifier" }
 	
 	static func toString(_ value: CFString) -> String {
 		return value as String

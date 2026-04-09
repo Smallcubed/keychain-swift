@@ -2,6 +2,8 @@ import Security
 import Foundation
 import AppKit
 import SCBaseKit
+import KeychainBase
+
 /**
 
 A collection of helper functions for saving text and data in the keychain.
@@ -85,53 +87,6 @@ open class KeychainSwift {
      - returns: The text value from the keychain. Returns nil if unable to read the item.
      
      */
-    
-    open func get(_ keychainIdentifier: Data) -> SCKeychainItem? {
-        
-        
-        lock.lock()
-        defer { lock.unlock() }
-        KeychainSwift._requestIdx_ += 1
-               let requestIdx = KeychainSwift._requestIdx_
-             
-        let query: [String: Any] = [
-            KeychainSwiftConstants.klass       : kSecClassGenericPassword,
-            kSecValuePersistentRef as String : keychainIdentifier,
-            KeychainSwiftConstants.returnReference : kCFBooleanTrue!,
-            KeychainSwiftConstants.returnData : kCFBooleanTrue!,
-            KeychainSwiftConstants.returnAttributes : kCFBooleanTrue!,
-            KeychainSwiftConstants.matchLimit  : kSecMatchLimitOne
-        ]
-        
-        lastQueryParameters = query
-        
-        var result: AnyObject?
-        
-        lastResultCode = withUnsafeMutablePointer(to: &result) {
-            SecItemCopyMatching(query as CFDictionary, UnsafeMutablePointer($0))
-        }
-        var attemptCount = 1
-        while (lastResultCode == errSecInteractionNotAllowed && attemptCount < recurseMax){
-            log(string:"[KEYCHAIN-GET \(requestIdx)] ⚠️ Keychain is not yet available -- trying again in .5 seconds")
-            Thread.sleep(until: Date(timeIntervalSinceNow: 0.5))
-            lastResultCode = withUnsafeMutablePointer(to: &result) {
-                SecItemCopyMatching(query as CFDictionary, UnsafeMutablePointer($0))
-            }
-            attemptCount += 1
-        }
-        if  lastResultCode == noErr {
-            if let rep = result as? Dictionary<String, Any>{
-                let entry = SCKeychainItem(rep)
-                return entry
-            }
-        }
-        else{
-            log(string:"[KEYCHAIN-GET \(requestIdx)] 🛑 Could not get keychain item with identifier \(keychainIdentifier.base64EncodedString()):  code:\(lastResultCode) msg:\(lastResultErrorDescription)")
-        }
-        
-        return nil
-    }
-    
     open func get(_ key: String, service: String? = nil, label: String? = nil) -> String? {
         if let data = getData(key, service: service, label: label) {
             
@@ -145,58 +100,6 @@ open class KeychainSwift {
         return nil
     }
     
-    open func fetchEntriesFor(_ account:String)-> [SCKeychainItem]?{
-        lock.lock()
-        defer { lock.unlock() }
-        KeychainSwift._requestIdx_ += 1
-        let requestIdx = KeychainSwift._requestIdx_
-             
-        let prefixedKey = keyWithPrefix(account)
-        
-        var query: [String: Any] = [
-            KeychainSwiftConstants.klass       : kSecClassGenericPassword,
-            KeychainSwiftConstants.attrAccount : prefixedKey,
-            KeychainSwiftConstants.returnReference : kCFBooleanTrue!,
-            KeychainSwiftConstants.returnData : kCFBooleanTrue!,
-            KeychainSwiftConstants.returnAttributes : kCFBooleanTrue!,
-            KeychainSwiftConstants.matchLimit  : kSecMatchLimitAll
-        ]
-        query = addDataProtection(query)
-        query = addAccessGroupWhenPresent(query)
-        query = addSynchronizableIfRequired(query, addingItems: false)
-        lastQueryParameters = query
-        
-        var result: AnyObject?
-        
-        var lastResultCode = withUnsafeMutablePointer(to: &result) {
-            SecItemCopyMatching(query as CFDictionary, UnsafeMutablePointer($0))
-        }
-        var attemptCount = 1
-        while (lastResultCode == errSecInteractionNotAllowed && attemptCount < recurseMax){
-            log(string:"[KEYCHAIN-Fetch \(requestIdx) ] ⚠️ Keychain is not yet available -- trying again in .5 seconds")
-            Thread.sleep(until: Date(timeIntervalSinceNow: 0.5))
-            lastResultCode = withUnsafeMutablePointer(to: &result) {
-                SecItemCopyMatching(query as CFDictionary, UnsafeMutablePointer($0))
-            }
-            attemptCount += 1
-        }
-        
-        if let reps = result as? NSArray{
-            var entries = [SCKeychainItem]()
-            
-            for rep in reps{
-                if let rep = rep as? [String: Any]{
-                    let entry  = SCKeychainItem(rep)
-                    entries.append(entry)
-                }
-            }
-            return entries
-        }
-        
-        log(string:"[KEYCHAIN-Fetch \(requestIdx) ] \(account) 🛑 Could not retrieve data")
-        
-        return nil
-    }
 	/**
 	 
 	 Retrieves the data from the keychain that corresponds to the given key.
@@ -208,7 +111,6 @@ open class KeychainSwift {
 	 - returns: The text value from the keychain. Returns nil if unable to read the item.
 	 
 	 */
-   
     func getDataNoLock(_ key: String,
                   service: String? = nil,
                   label:String? = nil,
@@ -258,12 +160,11 @@ open class KeychainSwift {
         }
         return result as? Data
     }
+	
 	open func getData(_ key: String,
 					  service: String? = nil, label: String? = nil,
 					  recurseCount: Int = 0,
 					  asReference: Bool = false) -> Data? {
-        
-        
         lock.lock()
         defer { lock.unlock() }
         KeychainSwift._requestIdx_ += 1
@@ -289,8 +190,98 @@ open class KeychainSwift {
 		return firstBit == 1
 	}
 	
+
+	//	MARK: - Deletion Methods
 	
-	//	MARK: - Set Methods
+	/**
+	 
+	 Deletes the single keychain item specified by the key.
+	 
+	 - parameter key: The key that is used to delete the keychain item.
+	 - parameter service: The service valeu that is used to delete the keychain item.
+	 - returns: True if the item was successfully deleted.
+	 
+	 */
+	@discardableResult
+	open func delete(_ key: String, service: String? = nil, label: String? = nil) -> Bool {
+		// The lock prevents the code to be run simultaneously
+		// from multiple threads which may result in crashing
+		lock.lock()
+		defer { lock.unlock() }
+        KeychainSwift._requestIdx_ += 1
+        let requestIdx = KeychainSwift._requestIdx_
+      
+		return deleteNoLock(key, service: service, label: label,requestIndex: requestIdx)
+	}
+	
+	/**
+	 
+	 Same as `delete` but is only accessed internally, since it is not thread safe.
+	 
+	 - parameter key: The key that is used to delete the keychain item.
+	 - parameter service: The service valeu that is used to delete the keychain item.
+	 - returns: True if the item was successfully deleted.
+	 
+	 */
+	@discardableResult
+	func deleteNoLock(_ key: String,
+                      service: String? = nil,
+                      label: String? = nil,
+                      requestIndex requestIdx: Int) -> Bool {
+		let prefixedKey = keyWithPrefix(key)
+		
+        var logKey = "\(key) "
+        if let service {  logKey += " *️⃣\(service)"}
+        if let label {  logKey += " #️⃣\(label)" }
+        
+		var query: [String: Any] = [
+			KeychainSwiftConstants.klass       : kSecClassGenericPassword,
+			KeychainSwiftConstants.attrAccount : prefixedKey
+		]
+		
+		query = addLabel(query, label: label)
+		query = addServiceName(query, override: service)
+		query = addDataProtection(query)
+		query = addAccessGroupWhenPresent(query)
+		query = addSynchronizableIfRequired(query, addingItems: false)
+		lastQueryParameters = query
+		
+		lastResultCode = SecItemDelete(query as CFDictionary)
+        if (lastResultCode != noErr){
+            log(string:"[KEYCHAIN-DELETE \(requestIdx)] 🛑 Could not delete entry for \(logKey) error: \(lastResultErrorDescription)" )
+        }
+        
+		return lastResultCode == noErr
+	}
+    
+	/**
+	 
+	 Deletes all Keychain items used by the app. Note that this method deletes all items regardless of the prefix settings used for initializing the class.
+	 
+	 - returns: True if the keychain items were successfully deleted.
+	 
+	 */
+	@discardableResult
+	open func clear() -> Bool {
+		// The lock prevents the code to be run simultaneously
+		// from multiple threads which may result in crashing
+		lock.lock()
+		defer { lock.unlock() }
+		
+		var query: [String: Any] = [ kSecClass as String : kSecClassGenericPassword ]
+		query = addServiceName(query, override: nil)
+		query = addDataProtection(query)
+		query = addAccessGroupWhenPresent(query)
+		query = addSynchronizableIfRequired(query, addingItems: false)
+		lastQueryParameters = query
+		
+		lastResultCode = SecItemDelete(query as CFDictionary)
+		
+		return lastResultCode == noErr
+	}
+	
+	
+	//	MARK: - Set Methods (SCKeychainItem)
 	
 	/**
 	 
@@ -333,91 +324,91 @@ open class KeychainSwift {
 	@discardableResult
 	open func set(_ value: Data, forKey key: String,
 				  service: String? = nil, label: String? = nil,
-                  withAccess access: KeychainSwiftAccessOptions? = nil) -> SCKeychainItem? {
-        
-        // The lock prevents the code to be run simultaneously
-        // from multiple threads which may result in crashing
-        lock.lock()
-        defer { lock.unlock() }
-        
-        var logKey = "\(key) "
-        if let service {  logKey += " *️⃣\(service)"}
-        if let label {  logKey += " #️⃣\(label)" }
-        
-        KeychainSwift._requestIdx_ += 1
-        let requestIdx = KeychainSwift._requestIdx_
-        
-        
-        let accessible = access?.value ?? overrideAccessOption.value
-        
-        let prefixedKey = keyWithPrefix(key)
-        
-        var query: [String : Any] = [
-            KeychainSwiftConstants.klass       : kSecClassGenericPassword,
-            KeychainSwiftConstants.attrAccount : prefixedKey,
-            KeychainSwiftConstants.valueData   : value,
-            KeychainSwiftConstants.accessible  : accessible,
-            KeychainSwiftConstants.returnReference : kCFBooleanTrue!,
-            KeychainSwiftConstants.returnData : kCFBooleanTrue!,
-            KeychainSwiftConstants.returnAttributes : kCFBooleanTrue!,
-            
-        ]
-        
-        query = addLabel(query, label: label)
-        query = addServiceName(query, override: service)
-        query = addDataProtection(query)
-        query = addAccessGroupWhenPresent(query)
-        query = addSynchronizableIfRequired(query, addingItems: true)
-        lastQueryParameters = query
-        let reference = getDataNoLock(key,service: service, label:label, requestIndex:requestIdx,asReference: true)
-        
-        if let currentData = getDataNoLock(key,service: service, label:label, requestIndex:requestIdx){
-            guard currentData != value else{
-                log(string:"[KEYCHAIN-SET \(requestIdx)] \(logKey) ❗️ Data is unchanged! returning" )
-                return nil
-            }
-            if let reference,
-               reference.count > 0{
-                if !deleteNoLock(reference, requestIndex: requestIdx){
-                    if lastResultCode != errSecItemNotFound {
-                        log(string:"[KEYCHAIN-SET \(requestIdx)] 🛑 Could not delete old key error: \(lastResultErrorDescription)" )
-                    }
-                }
-            }
-            else if !deleteNoLock(key, service: service, label: label,requestIndex: requestIdx) {
-                if lastResultCode != errSecItemNotFound {
-                    log(string:"[KEYCHAIN-SET \(requestIdx)] 🛑 Could not delete old key error: \(lastResultErrorDescription)" )
-                }
-            }
-        }
-       
-        
-        var result: AnyObject?
-        
-        let lastResultCode = withUnsafeMutablePointer(to: &result) {
-            SecItemAdd(query as CFDictionary, UnsafeMutablePointer($0))
-        }
-        var entry : SCKeychainItem?
-        if (lastResultCode == noErr){
-            if let rep = result as? [String: Any]{
-                entry = SCKeychainItem(rep)
-            }
-            log(string:"[KEYCHAIN-SET \(requestIdx)] \(logKey) 🟢 \((value as NSData).privacyRepresentation)" )
-            if let rereadData = getDataNoLock(key,service: service, label:label, requestIndex:requestIdx){
-                if (value != rereadData){
-                    log(string:"[KEYCHAIN-Valid \(requestIdx)] \(logKey) 🛑 readData (\((rereadData as NSData).privacyRepresentation)) does not match setData: \((value as NSData).privacyRepresentation)" )
-                }
-            }
-            else{
-                log(string:"[KEYCHAIN-Valid \(requestIdx)] \(logKey) 🛑 readData NIL does not match setData: \((value as NSData).privacyRepresentation)" )
-            }
-            
-        }
-        else{
-            log(string:"[KEYCHAIN-SET \(requestIdx)] \(logKey) 🛑 Could not set data \((value as NSData).privacyRepresentation) error: \(lastResultErrorDescription)")
-        }
-        return entry
-    }
+				  withAccess access: KeychainSwiftAccessOptions? = nil) -> SCKeychainItem? {
+		
+		// The lock prevents the code to be run simultaneously
+		// from multiple threads which may result in crashing
+		lock.lock()
+		defer { lock.unlock() }
+		
+		var logKey = "\(key) "
+		if let service {  logKey += " *️⃣\(service)"}
+		if let label {  logKey += " #️⃣\(label)" }
+		
+		KeychainSwift._requestIdx_ += 1
+		let requestIdx = KeychainSwift._requestIdx_
+		
+		
+		let accessible = access?.value ?? overrideAccessOption.value
+		
+		let prefixedKey = keyWithPrefix(key)
+		
+		var query: [String : Any] = [
+			KeychainSwiftConstants.klass       : kSecClassGenericPassword,
+			KeychainSwiftConstants.attrAccount : prefixedKey,
+			KeychainSwiftConstants.valueData   : value,
+			KeychainSwiftConstants.accessible  : accessible,
+			KeychainSwiftConstants.returnReference : kCFBooleanTrue!,
+			KeychainSwiftConstants.returnData : kCFBooleanTrue!,
+			KeychainSwiftConstants.returnAttributes : kCFBooleanTrue!,
+			
+		]
+		
+		query = addLabel(query, label: label)
+		query = addServiceName(query, override: service)
+		query = addDataProtection(query)
+		query = addAccessGroupWhenPresent(query)
+		query = addSynchronizableIfRequired(query, addingItems: true)
+		lastQueryParameters = query
+		let reference = getDataNoLock(key,service: service, label:label, requestIndex:requestIdx,asReference: true)
+		
+		if let currentData = getDataNoLock(key,service: service, label:label, requestIndex:requestIdx){
+			guard currentData != value else{
+				log(string:"[KEYCHAIN-SET \(requestIdx)] \(logKey) ❗️ Data is unchanged! returning" )
+				return nil
+			}
+			if let reference,
+			   reference.count > 0{
+				if !deleteNoLock(reference, requestIndex: requestIdx){
+					if lastResultCode != errSecItemNotFound {
+						log(string:"[KEYCHAIN-SET \(requestIdx)] 🛑 Could not delete old key error: \(lastResultErrorDescription)" )
+					}
+				}
+			}
+			else if !deleteNoLock(key, service: service, label: label,requestIndex: requestIdx) {
+				if lastResultCode != errSecItemNotFound {
+					log(string:"[KEYCHAIN-SET \(requestIdx)] 🛑 Could not delete old key error: \(lastResultErrorDescription)" )
+				}
+			}
+		}
+		
+		
+		var result: AnyObject?
+		
+		let lastResultCode = withUnsafeMutablePointer(to: &result) {
+			SecItemAdd(query as CFDictionary, UnsafeMutablePointer($0))
+		}
+		var entry : SCKeychainItem?
+		if (lastResultCode == noErr){
+			if let rep = result as? [String: Any]{
+				entry = SCKeychainItem(rep)
+			}
+			log(string:"[KEYCHAIN-SET \(requestIdx)] \(logKey) 🟢 \((value as NSData).privacyRepresentation)" )
+			if let rereadData = getDataNoLock(key,service: service, label:label, requestIndex:requestIdx){
+				if (value != rereadData){
+					log(string:"[KEYCHAIN-Valid \(requestIdx)] \(logKey) 🛑 readData (\((rereadData as NSData).privacyRepresentation)) does not match setData: \((value as NSData).privacyRepresentation)" )
+				}
+			}
+			else{
+				log(string:"[KEYCHAIN-Valid \(requestIdx)] \(logKey) 🛑 readData NIL does not match setData: \((value as NSData).privacyRepresentation)" )
+			}
+			
+		}
+		else{
+			log(string:"[KEYCHAIN-SET \(requestIdx)] \(logKey) 🛑 Could not set data \((value as NSData).privacyRepresentation) error: \(lastResultErrorDescription)")
+		}
+		return entry
+	}
 	
 	/**
 	 
@@ -444,139 +435,157 @@ open class KeychainSwift {
 	}
 	
 
-	//	MARK: - Deletion Methods
+	//	MARK: - SCKeychainItem Methods
 	
 	/**
 	 
-	 Deletes the single keychain item specified by the key.
+	 Retrieves the text value from the keychain that using the identifier.
 	 
-	 - parameter key: The key that is used to delete the keychain item.
-	 - parameter service: The service valeu that is used to delete the keychain item.
-	 - returns: True if the item was successfully deleted.
+	 - parameter keychainIdentifier: The key that is used to read the keychain item.
+	 - returns: An `SCKeychainItem` object from the keychain. Returns nil if unable to read the item.
 	 
 	 */
-	@discardableResult
-	open func delete(_ key: String, service: String? = nil, label: String? = nil) -> Bool {
-		// The lock prevents the code to be run simultaneously
-		// from multiple threads which may result in crashing
+	open func get(_ keychainIdentifier: String) -> SCKeychainItem? {
 		lock.lock()
 		defer { lock.unlock() }
-        KeychainSwift._requestIdx_ += 1
-        let requestIdx = KeychainSwift._requestIdx_
-      
-		return deleteNoLock(key, service: service, label: label,requestIndex: requestIdx)
-	}
-	
-    open func delete(_ keychainIdentifier: Data) -> Bool {
-        lock.lock()
-        defer { lock.unlock() }
-        KeychainSwift._requestIdx_ += 1
-        let requestIdx = KeychainSwift._requestIdx_
-        
-        let query: [String: Any] = [
-            KeychainSwiftConstants.klass       : kSecClassGenericPassword,
-            kSecValuePersistentRef as String : keychainIdentifier,
-            KeychainSwiftConstants.matchLimit  : kSecMatchLimitOne
-        ]
-        lastQueryParameters = query
-        
-        lastResultCode = SecItemDelete(query as CFDictionary)
-        if (lastResultCode != noErr){
-            log(string:"[KEYCHAIN-DELETE \(requestIdx)] 🛑 Could not delete entry for \(keychainIdentifier.base64EncodedString()) error: \(lastResultErrorDescription)" )
-        }
-        
-        return lastResultCode == noErr
-    }
-	/**
-	 
-	 Same as `delete` but is only accessed internally, since it is not thread safe.
-	 
-	 - parameter key: The key that is used to delete the keychain item.
-	 - parameter service: The service valeu that is used to delete the keychain item.
-	 - returns: True if the item was successfully deleted.
-	 
-	 */
-   
-	@discardableResult
-	func deleteNoLock(_ key: String,
-                      service: String? = nil,
-                      label: String? = nil,
-                      requestIndex requestIdx: Int) -> Bool {
-		let prefixedKey = keyWithPrefix(key)
+		KeychainSwift._requestIdx_ += 1
+		let requestIdx = KeychainSwift._requestIdx_
+		let identifierData = NSData(fromBase64String: keychainIdentifier) as Data
 		
-        var logKey = "\(key) "
-        if let service {  logKey += " *️⃣\(service)"}
-        if let label {  logKey += " #️⃣\(label)" }
-        
-		var query: [String: Any] = [
+		let query: [String: Any] = [
 			KeychainSwiftConstants.klass       : kSecClassGenericPassword,
-			KeychainSwiftConstants.attrAccount : prefixedKey
+			kSecValuePersistentRef as String : identifierData,
+			KeychainSwiftConstants.returnReference : kCFBooleanTrue!,
+			KeychainSwiftConstants.returnData : kCFBooleanTrue!,
+			KeychainSwiftConstants.returnAttributes : kCFBooleanTrue!,
+			KeychainSwiftConstants.matchLimit  : kSecMatchLimitOne
 		]
 		
-		query = addLabel(query, label: label)
-		query = addServiceName(query, override: service)
-		query = addDataProtection(query)
-		query = addAccessGroupWhenPresent(query)
-		query = addSynchronizableIfRequired(query, addingItems: false)
 		lastQueryParameters = query
 		
-		lastResultCode = SecItemDelete(query as CFDictionary)
-        if (lastResultCode != noErr){
-            log(string:"[KEYCHAIN-DELETE \(requestIdx)] 🛑 Could not delete entry for \(logKey) error: \(lastResultErrorDescription)" )
-        }
-        
-		return lastResultCode == noErr
+		var result: AnyObject?
+		
+		lastResultCode = withUnsafeMutablePointer(to: &result) {
+			SecItemCopyMatching(query as CFDictionary, UnsafeMutablePointer($0))
+		}
+		var attemptCount = 1
+		while (lastResultCode == errSecInteractionNotAllowed && attemptCount < recurseMax){
+			log(string:"[KEYCHAIN-GET \(requestIdx)] ⚠️ Keychain is not yet available -- trying again in .5 seconds")
+			Thread.sleep(until: Date(timeIntervalSinceNow: 0.5))
+			lastResultCode = withUnsafeMutablePointer(to: &result) {
+				SecItemCopyMatching(query as CFDictionary, UnsafeMutablePointer($0))
+			}
+			attemptCount += 1
+		}
+		if  lastResultCode == noErr {
+			if let rep = result as? Dictionary<String, Any>{
+				let entry = SCKeychainItem(rep)
+				return entry
+			}
+		}
+		else{
+			log(string:"[KEYCHAIN-GET \(requestIdx)] 🛑 Could not get keychain item with identifier \(keychainIdentifier.base64EncodedString()):  code:\(lastResultCode) msg:\(lastResultErrorDescription)")
+		}
+		
+		return nil
 	}
-    
-    @discardableResult
-    func deleteNoLock(_ keychainIdentifier:Data,
-                      requestIndex requestIdx: Int) -> Bool {
-        
-        var query: [String: Any] = [
-            KeychainSwiftConstants.klass       : kSecClassGenericPassword,
-            kSecValuePersistentRef as String : keychainIdentifier
-        ]
-        
-        query = addDataProtection(query)
-        query = addAccessGroupWhenPresent(query)
-        query = addSynchronizableIfRequired(query, addingItems: false)
-        lastQueryParameters = query
-        
-        lastResultCode = SecItemDelete(query as CFDictionary)
-        if (lastResultCode != noErr){
-            log(string:"[KEYCHAIN-DELETE \(requestIdx)] 🛑 Could not delete entry for \(keychainIdentifier.base64EncodedString()) error: \(lastResultErrorDescription)" )
-        }
-        
-        return lastResultCode == noErr
-    }
-    
 	
-	/**
-	 
-	 Deletes all Keychain items used by the app. Note that this method deletes all items regardless of the prefix settings used for initializing the class.
-	 
-	 - returns: True if the keychain items were successfully deleted.
-	 
-	 */
-	@discardableResult
-	open func clear() -> Bool {
-		// The lock prevents the code to be run simultaneously
-		// from multiple threads which may result in crashing
+	open func fetchEntriesFor(_ account:String)-> [SCKeychainItem] {
 		lock.lock()
 		defer { lock.unlock() }
+		KeychainSwift._requestIdx_ += 1
+		let requestIdx = KeychainSwift._requestIdx_
 		
-		var query: [String: Any] = [ kSecClass as String : kSecClassGenericPassword ]
-		query = addServiceName(query, override: nil)
+		let prefixedKey = keyWithPrefix(account)
+		
+		var query: [String: Any] = [
+			KeychainSwiftConstants.klass       : kSecClassGenericPassword,
+			KeychainSwiftConstants.attrAccount : prefixedKey,
+			KeychainSwiftConstants.returnReference : kCFBooleanTrue!,
+			KeychainSwiftConstants.returnData : kCFBooleanTrue!,
+			KeychainSwiftConstants.returnAttributes : kCFBooleanTrue!,
+			KeychainSwiftConstants.matchLimit  : kSecMatchLimitAll
+		]
+		query = addDataProtection(query)
+		query = addAccessGroupWhenPresent(query)
+		query = addSynchronizableIfRequired(query, addingItems: false)
+		lastQueryParameters = query
+		
+		var result: AnyObject?
+		
+		var lastResultCode = withUnsafeMutablePointer(to: &result) {
+			SecItemCopyMatching(query as CFDictionary, UnsafeMutablePointer($0))
+		}
+		var attemptCount = 1
+		while (lastResultCode == errSecInteractionNotAllowed && attemptCount < recurseMax){
+			log(string:"[KEYCHAIN-Fetch \(requestIdx) ] ⚠️ Keychain is not yet available -- trying again in .5 seconds")
+			Thread.sleep(until: Date(timeIntervalSinceNow: 0.5))
+			lastResultCode = withUnsafeMutablePointer(to: &result) {
+				SecItemCopyMatching(query as CFDictionary, UnsafeMutablePointer($0))
+			}
+			attemptCount += 1
+		}
+		
+		if let reps = result as? NSArray{
+			var entries = [SCKeychainItem]()
+			
+			for rep in reps{
+				if let rep = rep as? [String: Any]{
+					let entry  = SCKeychainItem(rep)
+					entries.append(entry)
+				}
+			}
+			return entries
+		}
+		
+		log(string:"[KEYCHAIN-Fetch \(requestIdx) ] \(account) 🛑 Could not retrieve data")
+		
+		return []
+	}
+
+	open func delete(_ keychainIdentifier: Data) -> Bool {
+		lock.lock()
+		defer { lock.unlock() }
+		KeychainSwift._requestIdx_ += 1
+		let requestIdx = KeychainSwift._requestIdx_
+		
+		let query: [String: Any] = [
+			KeychainSwiftConstants.klass       : kSecClassGenericPassword,
+			kSecValuePersistentRef as String : keychainIdentifier,
+			KeychainSwiftConstants.matchLimit  : kSecMatchLimitOne
+		]
+		lastQueryParameters = query
+		
+		lastResultCode = SecItemDelete(query as CFDictionary)
+		if (lastResultCode != noErr){
+			log(string:"[KEYCHAIN-DELETE \(requestIdx)] 🛑 Could not delete entry for \(keychainIdentifier.base64EncodedString()) error: \(lastResultErrorDescription)" )
+		}
+		
+		return lastResultCode == noErr
+	}
+
+	@discardableResult
+	func deleteNoLock(_ keychainIdentifier:Data,
+					  requestIndex requestIdx: Int) -> Bool {
+		
+		var query: [String: Any] = [
+			KeychainSwiftConstants.klass       : kSecClassGenericPassword,
+			kSecValuePersistentRef as String : keychainIdentifier
+		]
+		
 		query = addDataProtection(query)
 		query = addAccessGroupWhenPresent(query)
 		query = addSynchronizableIfRequired(query, addingItems: false)
 		lastQueryParameters = query
 		
 		lastResultCode = SecItemDelete(query as CFDictionary)
+		if (lastResultCode != noErr){
+			log(string:"[KEYCHAIN-DELETE \(requestIdx)] 🛑 Could not delete entry for \(keychainIdentifier.base64EncodedString()) error: \(lastResultErrorDescription)" )
+		}
 		
 		return lastResultCode == noErr
 	}
-	
+
 	
 	//	MARK: - Legacy Migration Code
 	
@@ -788,79 +797,3 @@ open class KeychainSwift {
 	
 }
 
-
-open class SCKeychainItem : NSObject {
-    
-    var rawDictionary : [String:Any]?
-    
-    @objc public
-    var legacyIdentifier : String?
-    
-   
-    
-    @objc public
-    var accountInfoPassword : String?
-    
-    @objc public
-    func password() -> String? {
-        if let passwordData = rawDictionary?[ kSecValueData as String] as? Data {
-            return String(data: passwordData, encoding: .utf8)
-        }
-        return accountInfoPassword
-    }
-    
-    @objc public
-    var passwordPII : String? {
-        if let nsData = rawDictionary?[kSecValueData as String] as? NSData {
-            return nsData.privacyRepresentation
-        }
-        return "<PII: NIL>"
-    }
-    @objc public
-    var identifier : String? {
-        let data = rawDictionary?[kSecValuePersistentRef as String] as? Data
-        return data?.base64EncodedString()
-    }
-    
-    @objc public
-    var service :  String? {
-        return rawDictionary?[kSecAttrService as String] as? String
-    }
-    
-    @objc public
-    var label:  String? {
-        return rawDictionary?[kSecAttrLabel as String] as? String
-    }
-    
-    @objc public
-    var account:  String? {
-        return rawDictionary?[kSecAttrAccount as String] as? String
-    }
-    @objc public
-    var isProvisional : Bool {
-        return self.identifier == nil
-    }
-    @objc public
-    var dictionaryRepresentation:  [String :Any]? {
-        return rawDictionary
-    }
-    
-    @objc init(_ rep : [String:Any]){
-        self.rawDictionary = rep
-    }
-    
-
-    @objc public override var description:  String {
-        var identifier = identifier ?? ""
-        if identifier.count > 0 {
-            identifier = " ID: \(identifier)"
-        }
-        else{
-            identifier = "❗️PROVISIONAL"
-        }
-        let acct = account ?? "-"
-        let srvc = service ?? "-"
-        let lbl = label ?? "-"
-        return super.description.appending("\(identifier) Account: \(acct) Service : \(srvc) Label: \(lbl)")
-    }
-}
