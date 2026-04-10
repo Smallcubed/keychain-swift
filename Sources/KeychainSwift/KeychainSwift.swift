@@ -390,7 +390,7 @@ open class KeychainSwift {
 		}
 		var entry : SCKeychainItem?
 		if (lastResultCode == noErr){
-			if let rep = result as? [String: Any]{
+			if let rep = result as? [String: Any] {
 				entry = SCKeychainItem(rep)
 			}
 			log(string:"[KEYCHAIN-SET \(requestIdx)] \(logKey) 🟢 \((value as NSData).privacyRepresentation)" )
@@ -469,7 +469,7 @@ open class KeychainSwift {
 			SecItemCopyMatching(query as CFDictionary, UnsafeMutablePointer($0))
 		}
 		var attemptCount = 1
-		while (lastResultCode == errSecInteractionNotAllowed && attemptCount < recurseMax){
+		while (lastResultCode == errSecInteractionNotAllowed && attemptCount < recurseMax) {
 			log(string:"[KEYCHAIN-GET \(requestIdx)] ⚠️ Keychain is not yet available -- trying again in .5 seconds")
 			Thread.sleep(until: Date(timeIntervalSinceNow: 0.5))
 			lastResultCode = withUnsafeMutablePointer(to: &result) {
@@ -483,8 +483,8 @@ open class KeychainSwift {
 				return entry
 			}
 		}
-		else{
-			log(string:"[KEYCHAIN-GET \(requestIdx)] 🛑 Could not get keychain item with identifier \(keychainIdentifier.base64EncodedString()):  code:\(lastResultCode) msg:\(lastResultErrorDescription)")
+		else {
+			log(string:"[KEYCHAIN-GET \(requestIdx)] 🛑 Could not get keychain item with identifier \(String(describing: keychainIdentifier.base64Encoded())):  code:\(lastResultCode) msg:\(lastResultErrorDescription)")
 		}
 		
 		return nil
@@ -531,8 +531,9 @@ open class KeychainSwift {
 			
 			for rep in reps{
 				if let rep = rep as? [String: Any]{
-					let entry  = SCKeychainItem(rep)
-					entries.append(entry)
+					if let entry = SCKeychainItem(rep) {
+						entries.append(entry)
+					}
 				}
 			}
 			return entries

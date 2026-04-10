@@ -123,10 +123,10 @@ extension KeychainSwift {
 	
 	@discardableResult
 	func store(account: KeychainAccount) -> SCKeychainItem? {
-        if (account.currentAccountInfoHash == nil){
+        if (account.currentAccountInfoHash == nil) {
             let _ = retrieve(account: account)
         }
-		guard let passwordData = account.loginPassword.data(using: String.Encoding.utf8) else {
+		guard let passwordData = account.loginPassword?.data(using: String.Encoding.utf8) else {
 			return nil
 		}
 		var smtpIdent: String? = nil
@@ -157,13 +157,14 @@ extension KeychainSwift {
 	}
 	
 	func deleteStore(account: KeychainAccount) -> Bool {
-		let item = SCKeychainItem.newWith(account, provisionalPassword: "")
+		guard let item = SCKeychainAccountItem(account, provisionalPassword: "") else {
+			return false
+		}
 		return deleteStore(item: item)
-//		return delete(account.keychainAccountName, service: "\(AccountModel.serviceKey): \(account.keychainServiceName)", label: "\(account.keychainLabelName) (\(AccountModel.serviceKey))")
 	}
 	
 	func deleteStore(item: SCKeychainItem) -> Bool {
-		return delete(item.account ?? "-", service: "\(AccountModel.serviceKey): \(item.service ?? "-")", label: "\(item.label ?? "-") (\(AccountModel.serviceKey))")
+		return delete(item.account, service: "\(AccountModel.serviceKey): \(item.service)", label: "\(item.label) (\(AccountModel.serviceKey))")
 	}
 	
 }
@@ -199,29 +200,3 @@ struct AccountModel: Codable {
 }
 
 
-extension SCKeychainItem {
-	
-	@objc(newWithAccount:provisionalPassword:)
-	public class func newWith(_ account: KeychainAccount, provisionalPassword: String) -> SCKeychainItem {
-		var rep : [String : Any] = [:]
-		rep[KeychainSwiftConstants.valueData] = provisionalPassword.data(using: .utf8)
-		rep[KeychainSwiftConstants.attrLabel] = account.keychainLabelName
-		rep[KeychainSwiftConstants.attrAccount] = account.keychainAccountName
-		rep[KeychainSwiftConstants.attrService] = account.keychainServiceName
-		rep[KeychainSwiftConstants.keychainTypeKey] = account.canSyncPassword ? KeychainType.typeiCloud : KeychainType.typeFile
-		return SCKeychainItem(rep)
-	}
-	
-	@objc(newWithAccount:accountInfoPassword:)
-	public class func newWith(_ account: KeychainAccount, accountInfoPassword: String) -> SCKeychainItem {
-		var rep : [String : Any] = [:]
-		rep[KeychainSwiftConstants.attrLabel] = account.keychainLabelName
-		rep[KeychainSwiftConstants.attrAccount] = account.keychainAccountName
-		rep[KeychainSwiftConstants.attrService] = account.keychainServiceName
-		let it = SCKeychainItem(rep)
-		it.accountInfoPassword = accountInfoPassword
-		rep[KeychainSwiftConstants.keychainTypeKey] = account.canSyncPassword ? KeychainType.typeiCloud : KeychainType.typeFile
-		return it
-	}
-	
-}

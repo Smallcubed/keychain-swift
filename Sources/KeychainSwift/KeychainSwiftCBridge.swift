@@ -306,7 +306,7 @@ public class KeychainSwiftCBridge: NSObject {
 		let keychain = account.canSyncPassword ? NSApp.iCloudKeychain.keychain : NSApp.fileKeychain.keychain;
 		
 		//	First try to get the item diretly using the identifier
-		if let identifier = account.accountProperties[KeychainSwiftConstants.accountIdentifierKey] as? String, !identifier.isEmpty {
+		if let identifier = account.property(forKey: KeychainSwiftConstants.accountIdentifierKey) as? String, !identifier.isEmpty {
 			logger.log(string:"Requesting existing keychainItem for account: \(account) keychainIdentifier: \(identifier)")
 			let entry = keychain.get(identifier)
 			if entry == nil {
@@ -337,9 +337,10 @@ public class KeychainSwiftCBridge: NSObject {
 				if let ident = localEntry.identifier {
 					account.set(property: ident, forKey: KeychainSwiftConstants.accountIdentifierKey)
 				}
-				let provisionalEntry = SCKeychainItem.newWith(account, provisionalPassword: localEntry.password() ?? "")
-				provisionalEntry.legacyIdentifier = localEntry.identifier
-				return provisionalEntry
+				if let provisionalEntry = SCKeychainAccountItem(account, provisionalPassword: localEntry.password ?? "") {
+					provisionalEntry.legacyIdentifier = localEntry.identifier
+					return provisionalEntry
+				}
 			}
 		}
 		
@@ -347,9 +348,10 @@ public class KeychainSwiftCBridge: NSObject {
 		//	Why is this provisional though if it was retreived from the keychain?
 		if let info = keychain.retrieve(account: account),
 		   let infoPassword = info[KeychainSwiftConstants.valueData] as? String {
-			let provisionalEntry = SCKeychainItem.newWith(account, provisionalPassword: infoPassword)
-			logger.log(string:"🟢 Found password \(String(describing: infoPassword.privacyRepresentation)) in account info for account: \(account) returning provisional item: \(provisionalEntry)")
-			return provisionalEntry
+			if let provisionalEntry = SCKeychainAccountItem(account, provisionalPassword: infoPassword) {
+				logger.log(string:"🟢 Found password \(String(describing: infoPassword.privacyRepresentation)) in account info for account: \(account) returning provisional item: \(provisionalEntry)")
+				return provisionalEntry
+			}
 		}
 		return nil
 	}
@@ -357,33 +359,22 @@ public class KeychainSwiftCBridge: NSObject {
 	@objc(saveItem:logger:)
 	static public func save(item: SCKeychainItem, logger: KeychainLogger) -> SCKeychainItem? {
 		//	Ensure that the various values are properly set on the item
-		guard let pw = item.password(), !pw.isEmpty,
-			  let acct = item.account,
-			  let service = item.service,
-			  let label = item.label
-		else {
-			logger.log(string: "🛑 Keychain item does not have values set: \(item)")
+		guard let pw = item.password, !pw.isEmpty else {
+			logger.log(string: "🛑 Keychain item does not have a password set: \(item)")
 			return nil
 		}
 		
-		//	Pick the correct keychain
-		var keychain = NSApp.iCloudKeychain.keychain
-		switch (item.keychainType) {
-		case .typeFile:
-			keychain = NSApp.fileKeychain.keychain
-			
-		case .typeiCloud:
-		default:
-			break
-		}
+		//	Get the correct keychain
+		let keychain = Self.keychain(for: item)
 
 		//	Was in provisional state, try to persist it
 		if item.isProvisional {
 			logger.log(string: "🟢 successfully authenticated with provisional password \(String(describing: item.passwordPII))!  Writing it to keychain")
-			let savedItem = keychain.set(pw, forKey: acct, service: service, label: label)
+			let savedItem = keychain.set(pw, forKey: item.account, service: item.service, label: item.label)
 			if let savedItem {
+//				keychain.store(item: savedItem)
 				logger.log(string: "🟢 Saved new password to item with identifier \(String(describing: savedItem.identifier))")
-				if pw == savedItem.password() {
+				if pw == savedItem.password {
 					logger.log(string: "🟢 Provisional password appears to have been saved to keychain")
 					return savedItem
 				}
@@ -404,37 +395,49 @@ public class KeychainSwiftCBridge: NSObject {
 	@objc(deleteItem:logger:)
 	static public func delete(item: SCKeychainItem, logger: KeychainLogger) -> Bool {
 		//	Ensure that the various values are properly set on the item
-		guard let pw = item.password(), !pw.isEmpty,
-			  let acct = item.account,
-			  let service = item.service,
-			  let label = item.label,
-			  let identifier = item.identifier
-		else {
+		guard let identifier = item.identifier else {
 			logger.log(string: "🛑 Keychain item does not have values set: \(item)")
 			return false
 		}
 		
-		//	Pick the correct keychain
+		//	Get the correct keychain
+		let keychain = Self.keychain(for: item)
+
+		//	Delete by using the identifier
+		let deleted = keychain.delete(NSData(fromBase64String: identifier) as Data)
+		logger.log(string: "The item \(item) was \(deleted ? "successfully" : "not successfully") deleted from the keychain")
+		
+		//	Returns true if EITHER happened
+		return deleted
+	}
+
+	@discardableResult
+	@objc(deleteInfoForItem:logger:)
+	static public func deleteInfo(item: SCKeychainItem, logger: KeychainLogger) -> Bool {
+		//	Get the correct keychain
+		let keychain = Self.keychain(for: item)
+		
+		//	Delete the account info
+		let deleted = keychain.deleteStore(item: item)
+		logger.log(string: "The account info was \(deleted ? "successfully" : "not successfully") deleted for \(item) from the keychain")
+		
+		//	Returns true if EITHER happened
+		return deleted
+	}
+	
+	static func keychain(for item: SCKeychainItem) -> KeychainSwift {
 		var keychain = NSApp.iCloudKeychain.keychain
 		switch (item.keychainType) {
 		case .typeFile:
 			keychain = NSApp.fileKeychain.keychain
 			
 		case .typeiCloud:
+			break
+			
 		default:
 			break
 		}
-		
-		//	Delete by using the identifier
-		let deleted = keychain.delete(NSData(fromBase64String: identifier) as Data)
-		logger.log(string: "The item \(item) was \(deleted ? "successfully" : "not successfully") deleted from the keychain")
-		
-		//	Then try deleting the account info
-		let infoDeleted = keychain.deleteStore(item: item)
-		logger.log(string: "The account info was \(infoDeleted ? "successfully" : "not successfully") deleted for \(item) from the keychain")
-
-		//	Returns true if EITHER happened
-		return deleted || infoDeleted
+		return keychain
 	}
-
+	
 }

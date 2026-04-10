@@ -9,8 +9,20 @@
 
 NS_ASSUME_NONNULL_BEGIN
 
-@protocol KeychainAccount <NSObject>
+@protocol KeychainAccountInfo <NSObject>
 
+@property (copy, readonly) NSString * hostname;
+@property (copy, readonly) NSString * keychainHostName;
+@property (readonly) NSInteger portNumber;
+@property (readonly) BOOL ssl;
+@property (copy, readonly) NSString * loginName;
+@property (strong, readonly, nullable) NSString * loginPassword;
+@property (strong, readonly) NSString * authenticationMethod;
+@property (readonly) NSString * displayName; // the user facing name of the account
+
+@end
+
+@protocol KeychainAccount <NSObject, KeychainAccountInfo>
 @property (strong, readonly) NSString * keychainPrefix;
 @property (strong, readonly) NSString * keychainAccountName;
 @property (strong, readonly) NSString * keychainServiceName;
@@ -22,29 +34,18 @@ NS_ASSUME_NONNULL_BEGIN
 @property (strong, nullable) NSString * currentAccountInfoHash;
 
 @property (readonly) BOOL canSyncPassword;
+
 @property (strong) NSDictionary * accountProperties;
-
-@property (copy, readonly) NSString * hostname;
-@property (copy, readonly) NSString * keychainHostName;
-@property (readonly) NSInteger portNumber;
-@property (readonly) BOOL ssl;
-@property (copy, readonly) NSString * loginName;
-@property (strong, readonly) NSString * loginPassword;
-@property (strong, readonly) NSString * authenticationMethod;
-@property (readonly) NSString * displayName; // the user facing name of the account
-
 - (id)accountPropertyForKey:(NSString *)key NS_SWIFT_NAME(property(forKey:));
 - (void)setAccountProperty:(id _Nullable)property forKey:(NSString *)key NS_SWIFT_NAME(set(property:forKey:));
+@end
 
+@protocol KeychainWithSMTPAccount <NSObject>
+@property (strong, readonly, nullable) NSString * preferredSMTPAccountIdentifier;
 @end
 
 @protocol KeychainLogger
 - (void)logString:(nonnull NSString *)string NS_SWIFT_NAME(log(string:));
-@end
-
-
-@protocol KeychainWithSMTPAccount <NSObject>
-@property (strong, readonly, nullable) NSString * preferredSMTPAccountIdentifier;
 @end
 
 typedef NS_ENUM(NSInteger, KeychainType) {
