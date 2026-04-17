@@ -1,5 +1,6 @@
 import Security
 import AppKit
+import SCBaseKit
 import KeychainBase
 
 /**
@@ -30,6 +31,8 @@ import KeychainBase
 public class KeychainSwiftCBridge: NSObject {
 	let keychain = KeychainSwift()
 		
+	//	MARK: - Pass-Thru Variables
+	
 	@objc
 	open var lastResultCode: OSStatus {
 		get { return keychain.lastResultCode }
@@ -65,6 +68,8 @@ public class KeychainSwiftCBridge: NSObject {
 		get { return keychain.overrideAccessOption }
 	}
 
+	
+	//	MARK: - Setting
 	
 	@objc(setPassword:forKey:)
 	@discardableResult
@@ -120,6 +125,8 @@ public class KeychainSwiftCBridge: NSObject {
 		return keychain.set(value, forKey: key, service: service, label: label)
 	}
 	
+	//	MARK: - Retrieval
+	
 	@objc(passwordForKey:)
 	open func get(_ key: String) -> String? {
 		return keychain.get(key)
@@ -165,6 +172,8 @@ public class KeychainSwiftCBridge: NSObject {
 		return keychain.getBool(key, service: service, label: label) ?? false
 	}
 	
+	//	MARK: - Deletion
+	
 	@objc(deleteForKey:)
 	@discardableResult
 	open func delete(_ key: String) -> Bool {
@@ -189,7 +198,7 @@ public class KeychainSwiftCBridge: NSObject {
 	}
 	
 	
-	//	MARK: Legacy Management
+	//	MARK: - Legacy Management
 
 	@objc(migratePasswordForKey:service:)
 	@discardableResult
@@ -216,113 +225,104 @@ public class KeychainSwiftCBridge: NSObject {
 	}
 	
 
-	//	MARK: Account extension
+	//	MARK: - Account extension
 	
-	@objc(passwordForAccount:)
-	open func password(account: KeychainAccount) -> String? {
-		return keychain.password(account: account)
-	}
+//	@objc(passwordForAccount:)
+//	open func password(account: KeychainAccount) -> String? {
+//		return keychain.password(account: account)
+//	}
+//	
+//	@objc(dataForAccount:)
+//	open func data(account: KeychainAccount) -> Data? {
+//		return keychain.data(account: account)
+//	}
+//	
+//	@objc(deletePasswordForAccount:)
+//	@discardableResult
+//	open func delete(account: KeychainAccount) -> Bool {
+//		return keychain.deletePassword(account: account)
+//	}
+//	
+//	@objc(deleteInfoForAccount:)
+//	@discardableResult
+//	open func deleteInfo(account: KeychainAccount) -> Bool {
+//		return keychain.deleteStore(account: account)
+//	}
+//	
+//	@objc(setPassword:forAccount:)
+//	@discardableResult
+//	open func set(_ value: String, forAccount account: KeychainAccount) -> SCKeychainItem? {
+//		return keychain.set(value, account: account)
+//	}
+//	
+//	@objc(setData:forAccount:)
+//	@discardableResult
+//	open func setData(_ value: Data, forAccount account: KeychainAccount) -> SCKeychainItem? {
+//		return keychain.set(value, account: account)
+//	}
 	
 	@objc(dataForAccount:)
-	open func data(account: KeychainAccount) -> Data? {
-		return keychain.data(account: account)
+	static public func data(account: KeychainAccount) -> Data? {
+		//	Pick the correct keychain
+		var keychain = NSApp.iCloudKeychain.keychain
+		var shouldTryiCloudAsWell = false
+		if !account.canSyncPassword {
+			keychain = NSApp.fileKeychain.keychain
+			if account.authenticationMethod == "XOAUTH2" {
+				shouldTryiCloudAsWell = true
+			}
+		}
+		let value = keychain.data(account: account)
+		if let value {
+			return value
+		}
+		if shouldTryiCloudAsWell {
+			return NSApp.iCloudKeychain.keychain.data(account: account)
+		}
+		return nil
 	}
-	
-	@objc(deletePasswordForAccount:)
+
 	@discardableResult
-	open func delete(account: KeychainAccount) -> Bool {
-		return keychain.deletePassword(account: account)
+	@objc(saveData:forAccount:)
+	static public func save(data: Data, account: KeychainAccount) -> SCKeychainItem? {
+		//	Pick the correct keychain
+		let keychain = account.canSyncPassword ? NSApp.iCloudKeychain.keychain : NSApp.fileKeychain.keychain;
+		return keychain.set(data, account: account)
 	}
 	
-	@objc(deleteInfoForAccount:)
-	@discardableResult
-	open func deleteInfo(account: KeychainAccount) -> Bool {
-		return keychain.deleteStore(account: account)
-	}
+	//	MARK: - Class methods for acting on Keychain Items
 	
-	@objc(setPassword:forAccount:)
-	@discardableResult
-	open func set(_ value: String, forAccount account: KeychainAccount) -> SCKeychainItem? {
-		return keychain.set(value, account: account)
-	}
-	
-	@objc(setData:forAccount:)
-	@discardableResult
-	open func setData(_ value: Data, forAccount account: KeychainAccount) -> SCKeychainItem? {
-		return keychain.set(value, account: account)
-	}
-	
-	
-	
-	
-//	@objc(entryWithIdentifier:)
-//	open func entry(identifier:String) -> SCKeychainItem? {
-//		let identifierData = NSData(fromBase64String: identifier) as Data
-//		return keychain.get(identifierData)
-//	}
-//
-//	@objc(deleteEntryWithIdentifier:)
-//	@discardableResult
-//	open func deleteEntryWithIdentifer(_ identifier:String?)-> Bool{
-//		guard let identifier else {
-//			return false
-//		}
-//		return keychain.delete(NSData(fromBase64String: identifier) as Data)
-//	}
-//	@objc(deleteEntry:)
-//	@discardableResult
-//	open func delete(entry:SCKeychainItem?)-> Bool{
-//		if let entry,
-//		   let identifier = entry.identifier{
-//			return keychain.delete(NSData(fromBase64String: identifier) as Data)
-//		}
-//		return false
-//	}
-//	
-//	@objc(retrieveInfoForAccount:)
-//	open func retrieve(_ account: KeychainAccount) -> [String: Any]? {
-//		return keychain.retrieve(account: account)
-//	}
-//	
-//    @objc(fetchEntriesForAccount:)
-//    open func fetch(_ account: KeychainAccount) -> [SCKeychainItem] {
-//        return keychain.fetchEntriesFor(account.keychainAccountName)
-//    }
-//	
-//    @objc
-//    open func allEntriesByIdentifier() -> [String:SCKeychainItem] {
-//        var  keysById: [String : SCKeychainItem] = [:]
-//        for entry in keychain.allEntries {
-//            if let identifier = entry.identifier {
-//                keysById[identifier] = entry
-//            }
-//        }
-//        return keysById
-//    }
-	
-	@objc(passwordKeychainItemWithAccount:logger:)
-	static public func passwordKeychainItem(account: KeychainAccount, logger: KeychainLogger) -> SCKeychainItem? {
+	@objc(passwordKeychainItemWithAccount:)
+	static public func passwordKeychainItem(account: KeychainAccount) -> SCKeychainItem? {
 		//	Pick the correct keychain
 		let keychain = account.canSyncPassword ? NSApp.iCloudKeychain.keychain : NSApp.fileKeychain.keychain;
 		
 		//	First try to get the item diretly using the identifier
 		if let identifier = account.property(forKey: KeychainSwiftConstants.accountIdentifierKey) as? String, !identifier.isEmpty {
-			logger.log(string:"Requesting existing keychainItem for account: \(account) keychainIdentifier: \(identifier)")
-			let entry = keychain.get(identifier)
-			if entry == nil {
-				logger.log(string:"🛑 [Keychain] No Keychain Item Found using Identifier: \(identifier)")
+			keychain.log(string:"Requesting existing keychainItem for account: \(account) keychainIdentifier: \(identifier)")
+			let item = keychain.get(identifier)
+			if let item {
+				keychain.log(string:"🟢 Returning existing keychainItem: \(String(describing: item)) (password: \(String(describing: item.passwordPII))")
+				return SCKeychainAccountItem(account: account, keychainItem: item)
 			}
 			else {
-				logger.log(string:"🟢 Returning existing keychainItem: \(String(describing: entry)) (password: \(String(describing: entry?.passwordPII))")
-				return entry
+				keychain.log(string:"🛑 [Keychain] No Keychain Item Found using Identifier: \(identifier)")
 			}
 		}
 		
+		//	Fallback to the standard method of getting the password for the account
+		if let item = keychain.get(account: account) {
+			let accountItem = SCKeychainAccountItem(account: account, keychainItem: item)
+			keychain.log(string:"🟢 Found password \(item.passwordPII) in using accountName/service/label for account: \(account) returning item: \(accountItem)")
+			return accountItem
+		}
+
 		//	Then search through all of the entries to find a match based on the identifier
 		let entries = keychain.fetchEntriesFor(account.keychainAccountName)
+		keychain.log(string: "🟢 Found \(entries.count) candidate keychainItems")
 		for localEntry in entries {
 			if localEntry.service == account.keychainServiceName {
-				logger.log(string:"🟢 Found candidate keychainItem: \(localEntry)")
+				keychain.log(string:"🟢 Found candidate keychainItem: \(localEntry)")
 				if let ident = localEntry.identifier {
 					account.set(property: ident, forKey: KeychainSwiftConstants.accountIdentifierKey)
 				}
@@ -333,97 +333,124 @@ public class KeychainSwiftCBridge: NSObject {
 		//	Then search through the legacy service names
 		for localEntry in entries {
 			if localEntry.service == account.keychainLegacyServiceName {
-				logger.log(string:"🟢 Found candidate keychainItem for account: \(account.displayName) : \(localEntry)")
-				if let ident = localEntry.identifier {
-					account.set(property: ident, forKey: KeychainSwiftConstants.accountIdentifierKey)
-				}
+				keychain.log(string:"🟢 Found legacy candidate keychainItem for account: \(account.displayName) : \(localEntry)")
 				if let provisionalEntry = SCKeychainAccountItem(account, provisionalPassword: localEntry.password ?? "") {
 					provisionalEntry.legacyIdentifier = localEntry.identifier
+					keychain.log(string:"🟢 Provisional keychainItem made: \(provisionalEntry)")
 					return provisionalEntry
 				}
 			}
 		}
 		
-		//	Fallback to the standard method of getting the keychain info for the account
-		//	Why is this provisional though if it was retreived from the keychain?
-		if let info = keychain.retrieve(account: account),
-		   let infoPassword = info[KeychainSwiftConstants.valueData] as? String {
-			if let provisionalEntry = SCKeychainAccountItem(account, provisionalPassword: infoPassword) {
-				logger.log(string:"🟢 Found password \(String(describing: infoPassword.privacyRepresentation)) in account info for account: \(account) returning provisional item: \(provisionalEntry)")
-				return provisionalEntry
-			}
-		}
 		return nil
 	}
 	
-	@objc(saveItem:logger:)
-	static public func save(item: SCKeychainItem, logger: KeychainLogger) -> SCKeychainItem? {
-		//	Ensure that the various values are properly set on the item
+	@objc(saveItem:)
+	static public func save(item: SCKeychainItem) -> SCKeychainItem? {
+		//	Get the correct keychain
+		let keychain = Self.keychain(for: item)
+		
+		//	Ensure that we actually have a non-empty password
 		guard let pw = item.password, !pw.isEmpty else {
-			logger.log(string: "🛑 Keychain item does not have a password set: \(item)")
+			keychain.log(string: "🛑 Keychain item does not have a password set: \(item)")
 			return nil
 		}
 		
-		//	Get the correct keychain
-		let keychain = Self.keychain(for: item)
-
 		//	Was in provisional state, try to persist it
 		if item.isProvisional {
-			logger.log(string: "🟢 successfully authenticated with provisional password \(String(describing: item.passwordPII))!  Writing it to keychain")
-			let savedItem = keychain.set(pw, forKey: item.account, service: item.service, label: item.label)
+			
+			//	If the keychain was changed, then delete the original before etting the new one,
+			//	otherwise it ends up deleting the created one. (It seems the identifier is actually
+			//	a has of the key, service and label)
+			if let accountItem = item as? SCKeychainAccountItem,
+			   accountItem.migrationDirection != .none {
+				var kc = NSApp.iCloudKeychain.keychain
+				//	Use the opposite keychain to delete, since we want to delete the old one
+				switch accountItem.migrationDirection {
+				case .toiCloud:
+					kc = NSApp.fileKeychain.keychain
+					
+				case .none, .toFile:
+					break
+				@unknown default:
+					break
+				}
+				
+				//	First try to delete by the legacy identifier
+				var deleted = false;
+				if let prevKeychainIdentifier = accountItem.legacyIdentifier {
+					deleted = kc.delete(NSData(fromBase64String: prevKeychainIdentifier) as Data)
+				}
+				if !deleted {
+					deleted = kc.delete(item.accountName, service: item.service, label: item.label)
+				}
+				kc.log(string: "🗑️ Deleted migrated keychain item successfully \(deleted)")
+			}
+
+			
+			keychain.log(string: "🟢 successfully authenticated with provisional password \(String(describing: item.passwordPII))!  Writing it to keychain")
+			var savedItem = keychain.set(pw, forKey: item.accountName, service: item.service, label: item.label)
+			if let acctItem = item as? SCKeychainAccountItem, let anItem = savedItem {
+				savedItem = SCKeychainAccountItem(account: acctItem.account, keychainItem: anItem)
+			}
 			if let savedItem {
-//				keychain.store(item: savedItem)
-				logger.log(string: "🟢 Saved new password to item with identifier \(String(describing: savedItem.identifier))")
+				keychain.log(string: "🟢 Saved new password to item with identifier \(String(describing: savedItem.identifier))")
 				if pw == savedItem.password {
-					logger.log(string: "🟢 Provisional password appears to have been saved to keychain")
+					keychain.log(string: "🟢 Provisional password appears to have been saved to keychain")
+					if let legacyIdentifier = savedItem.legacyIdentifier, legacyIdentifier != savedItem.identifier,
+					   let legacyIdentifierData = Data(base64Encoded: legacyIdentifier)
+					{
+						keychain.log(string: "🔄 Also deleting old keychain item with identifier \(legacyIdentifier)")
+						_ = keychain.delete(legacyIdentifierData)
+					}
 					return savedItem
 				}
-			} else {
-				logger.log(string: "🛑 New password appears not to have been saved to keychain")
+				else {
+					keychain.log(string: "🛑 Keychain password does not match provisional")
+				}
+			}
+			else {
+				keychain.log(string: "🛑 New password appears not to have been saved to keychain")
 			}
 		}
 		//	Otherwise nothing to do, except return original item
 		else {
-			logger.log(string: "🟢 Successfully authenticated with Keychain Item \(item) Using \(String(describing: item.passwordPII))")
+			keychain.log(string: "🟢 Successfully authenticated with Keychain Item \(item) Using \(String(describing: item.passwordPII))")
 			return item
 		}
-		
 		return nil
 	}
 	
 	@discardableResult
-	@objc(deleteItem:logger:)
-	static public func delete(item: SCKeychainItem, logger: KeychainLogger) -> Bool {
+	@objc(deleteItem:)
+	static public func delete(item: SCKeychainItem?) -> Bool {
+		guard let item else { return false }
+		//	Get the correct keychain
+		let keychain = Self.keychain(for: item)
+		
 		//	Ensure that the various values are properly set on the item
 		guard let identifier = item.identifier else {
-			logger.log(string: "🛑 Keychain item does not have values set: \(item)")
+			keychain.log(string: "🛑 Keychain item does not have values set: \(item)")
 			return false
 		}
 		
-		//	Get the correct keychain
-		let keychain = Self.keychain(for: item)
-
 		//	Delete by using the identifier
 		let deleted = keychain.delete(NSData(fromBase64String: identifier) as Data)
-		logger.log(string: "The item \(item) was \(deleted ? "successfully" : "not successfully") deleted from the keychain")
-		
-		//	Returns true if EITHER happened
+		keychain.log(string: "The item \(item) was \(deleted ? "successfully" : "not successfully") deleted from the keychain")
 		return deleted
 	}
 
 	@discardableResult
-	@objc(deleteInfoForItem:logger:)
-	static public func deleteInfo(item: SCKeychainItem, logger: KeychainLogger) -> Bool {
-		//	Get the correct keychain
-		let keychain = Self.keychain(for: item)
-		
+	@objc(deleteForIdentifier:)
+	public func delete(identifier: String) -> Bool {
 		//	Delete the account info
-		let deleted = keychain.deleteStore(item: item)
-		logger.log(string: "The account info was \(deleted ? "successfully" : "not successfully") deleted for \(item) from the keychain")
-		
-		//	Returns true if EITHER happened
+		let deleted = keychain.delete(NSData(fromBase64String: identifier) as Data)
+		keychain.log(string: "The account info was \(deleted ? "successfully" : "not successfully") deleted for identifier \(identifier) from the keychain")
 		return deleted
 	}
+	
+	
+	//	MARK: - Helpers
 	
 	static func keychain(for item: SCKeychainItem) -> KeychainSwift {
 		var keychain = NSApp.iCloudKeychain.keychain

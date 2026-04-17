@@ -9,6 +9,14 @@
 
 NS_ASSUME_NONNULL_BEGIN
 
+@class SCKeychainItem;
+
+typedef NS_ENUM(NSInteger, KeychainMigrationDirection) {
+	KeychainMigrationDirectionNone = 0,
+	KeychainMigrationDirectionToiCloud = 1,
+	KeychainMigrationDirectionToFile = 2,
+};
+
 @protocol KeychainAccountInfo <NSObject>
 
 @property (copy, readonly) NSString * hostname;
@@ -16,13 +24,16 @@ NS_ASSUME_NONNULL_BEGIN
 @property (readonly) NSInteger portNumber;
 @property (readonly) BOOL ssl;
 @property (copy, readonly) NSString * loginName;
-@property (strong, readonly, nullable) NSString * loginPassword;
 @property (strong, readonly) NSString * authenticationMethod;
 @property (readonly) NSString * displayName; // the user facing name of the account
 
 @end
 
 @protocol KeychainAccount <NSObject, KeychainAccountInfo>
+@property (readonly, nullable) SCKeychainItem * passwordItem;
+@property (assign) KeychainMigrationDirection migDirection;
+@property (strong, nullable) NSString * migrationPreviousIdentifier;
+
 @property (strong, readonly) NSString * keychainPrefix;
 @property (strong, readonly) NSString * keychainAccountName;
 @property (strong, readonly) NSString * keychainServiceName;
@@ -36,7 +47,7 @@ NS_ASSUME_NONNULL_BEGIN
 @property (readonly) BOOL canSyncPassword;
 
 @property (strong) NSDictionary * accountProperties;
-- (id)accountPropertyForKey:(NSString *)key NS_SWIFT_NAME(property(forKey:));
+- (id _Nullable)accountPropertyForKey:(NSString *)key NS_SWIFT_NAME(property(forKey:));
 - (void)setAccountProperty:(id _Nullable)property forKey:(NSString *)key NS_SWIFT_NAME(set(property:forKey:));
 @end
 
@@ -44,19 +55,9 @@ NS_ASSUME_NONNULL_BEGIN
 @property (strong, readonly, nullable) NSString * preferredSMTPAccountIdentifier;
 @end
 
-@protocol KeychainLogger
-- (void)logString:(nonnull NSString *)string NS_SWIFT_NAME(log(string:));
-@end
-
 typedef NS_ENUM(NSInteger, KeychainType) {
 	KeychainTypeiCloud = 0,
 	KeychainTypeFile = 1,
-};
-
-typedef NS_ENUM(NSInteger, KeychainMigrationDirection) {
-	KeychainMigrationDirectionNone = 0,
-	KeychainMigrationDirectionToiCloud = 1,
-	KeychainMigrationDirectionToFile = 2,
 };
 
 NS_ASSUME_NONNULL_END
