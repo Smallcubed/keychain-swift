@@ -13,13 +13,13 @@ let package = Package(
 		),
     ],
     dependencies: [
-        .package(name: "SCBaseKit", url: "git@bitbucket.org:smallcubed/smallcubed-foundation-code.git", branch: "Refactor/spm"),
+        .package(url: "git@bitbucket.org:smallcubed/smallcubed-foundation-code.git", .upToNextMajor(from: "2.0.0")),
     ],
     targets: [
 		.target(
 			name: "KeychainBase",
 			dependencies: [
-                .product(name: "SCBaseKit", package: "SCBaseKit")
+                .product(name: "SCBaseKit", package: "smallcubed-foundation-code")
             ],
 			publicHeadersPath: "Includes"
 		),
