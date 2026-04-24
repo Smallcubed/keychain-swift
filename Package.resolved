@@ -1,9 +1,9 @@
 {
   "pins" : [
     {
-      "identity" : "smallcubed-foundation-code",
+      "identity" : "scbasekit",
       "kind" : "remoteSourceControl",
-      "location" : "git@bitbucket.org:smallcubed/smallcubed-foundation-code.git",
+      "location" : "git@bitbucket.org:smallcubed/scbasekit.git",
       "state" : {
         "revision" : "32232a3c907d98bbf5c39ed8157eff0a0b26f8fb",
         "version" : "2.0.0"
