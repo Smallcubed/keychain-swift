@@ -3,10 +3,10 @@
     {
       "identity" : "scbasekit",
       "kind" : "remoteSourceControl",
-      "location" : "git@bitbucket.org:smallcubed/scbasekit.git",
+      "location" : "git@ssh.bitbucket.org:smallcubed/scbasekit.git",
       "state" : {
-        "revision" : "32232a3c907d98bbf5c39ed8157eff0a0b26f8fb",
-        "version" : "2.0.0"
+        "revision" : "ce5d32908aee2b45d733d5f1659efa00adb1ac90",
+        "version" : "2.0.12"
       }
     }
   ],
